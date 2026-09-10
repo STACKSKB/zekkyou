@@ -20,7 +20,7 @@ defmodule Zekkyou.Tasks do
     do: GenServer.call(Service.component(name, :tasks), {operation, payload}, 10_000)
 
   def commands(name) do
-    Map.new(~w(submit list get cancel reconcile), fn operation ->
+    Map.new(~w(submit list get cancel reconcile decide), fn operation ->
       {"tasks." <> operation, fn payload -> command(name, operation, payload) end}
     end)
   end
@@ -42,7 +42,9 @@ defmodule Zekkyou.Tasks do
        name: ledger,
        id: "tasks",
        dir: Path.join(config.state_dir, "operations"),
-       max_ops: settings[:max_tasks]}
+       max_ops: settings[:max_tasks],
+       max_recovery_bytes: 2_000_000,
+       max_record_bytes: 4_000_000}
     ]
 
     workers =
@@ -211,6 +213,38 @@ defmodule Zekkyou.Tasks do
     end
   end
 
+  def handle_call(
+        {"decide", %{"id" => id, "revision" => revision, "decision" => decision}},
+        _from,
+        state
+      )
+      when is_binary(id) and is_integer(revision) and decision in ["approve", "deny"] do
+    reply =
+      with {:ok, recovered} <-
+             OperationLog.resume_checkpoint(state.ledger, id, revision, %{"decision" => decision}),
+           admission when admission in [:ok, {:error, :queue_full}] <-
+             restore_if_retry(state, id, :retry_permitted, recovered) do
+        {:accepted, recovered.revision, admission}
+      else
+        {:error, _} = error -> error
+        _ -> {:error, :task_still_running}
+      end
+
+    case reply do
+      {:accepted, revision, admission} ->
+        pending =
+          if admission == {:error, :queue_full},
+            do: MapSet.put(state.pending_admissions, id),
+            else: state.pending_admissions
+
+        {:reply, {:ok, %{"task_id" => id, "revision" => revision}},
+         %{state | pending_admissions: pending}}
+
+      error ->
+        {:reply, error, state}
+    end
+  end
+
   def handle_call({:started, id, run_id, session_id, worker}, _from, state) do
     ref = Process.monitor(worker)
     active = Map.put(state.active, id, %{run_id: run_id, session_id: session_id, monitor: ref})
@@ -284,8 +318,7 @@ defmodule Zekkyou.Tasks do
 
   defp execute(name, payload, context) do
     registry = Service.registry(name)
-    opts = [owner: self()]
-    opts = if payload["resume"], do: Keyword.put(opts, :resume, payload["resume"]), else: opts
+    opts = execution_options(name, payload, context)
 
     case Runs.start_run(registry, "scheduled/" <> payload["profile"], payload["task"], opts) do
       {:ok, run} ->
@@ -302,6 +335,27 @@ defmodule Zekkyou.Tasks do
 
       {:error, reason} ->
         {:outcome, :rejected_before_dispatch, %{reason: inspect(reason)}}
+    end
+  end
+
+  defp execution_options(name, payload, context) do
+    {:ok, recovered} =
+      OperationLog.recovery(Service.component(name, :ledger), context.operation_key)
+
+    grant = Map.get(recovered, :checkpoint_grant_revision)
+    decision = get_in(recovered, [:checkpoint_decision, "decision"])
+    opts = [owner: self()]
+
+    cond do
+      is_integer(grant) and recovered.revision == grant + 1 and decision in ["approve", "deny"] ->
+        decision = if decision == "approve", do: :approve, else: :deny
+        Keyword.put(opts, :checkpoint, {recovered.checkpoint, decision})
+
+      payload["resume"] ->
+        Keyword.put(opts, :resume, payload["resume"])
+
+      true ->
+        opts
     end
   end
 
@@ -325,6 +379,10 @@ defmodule Zekkyou.Tasks do
         {:park, {:result_unavailable, reason}}
     end
   end
+
+  defp task_outcome({:error, :approval_suspended, %{checkpoint: packet}}, _run, _session)
+       when is_map(packet),
+       do: {:checkpoint, packet}
 
   defp task_outcome({:error, reason, nil}, _run, _session),
     do: {:park, {:runner_failed_without_result, reason}}
@@ -373,6 +431,7 @@ defmodule Zekkyou.Tasks do
 
     if payload do
       active = state.active[id]
+      checkpoint = if recovery, do: Map.get(recovery, :checkpoint) || %{}, else: %{}
       status = task_status(OperationLog.status(state.ledger, id), record, active)
 
       evidence =
@@ -389,13 +448,18 @@ defmodule Zekkyou.Tasks do
         "created_at_ms" => payload["created_at_ms"],
         "not_before_ms" => payload["not_before_ms"],
         "run_id" => (active && active.run_id) || (evidence[:run_id] || evidence["run_id"]),
+        "approval" => if(status == "waiting_approval", do: checkpoint["request"], else: nil),
+        "usage" => checkpoint["usage"] || %{},
         "session_id" =>
-          (active && active.session_id) || (evidence[:session_id] || evidence["session_id"]),
+          (active && active.session_id) || (evidence[:session_id] || evidence["session_id"]) ||
+            checkpoint["session_id"],
         "revision" => recovery && recovery.revision,
         "evidence" => Alto.Protocol.encode_term(evidence)
       }
     end
   end
+
+  defp task_status({:checkpointed, _, _}, _, _), do: "waiting_approval"
 
   defp task_status({:decided, class, _}, _, _) when class in [:unknown, :requires_operator],
     do: "requires_operator"
@@ -411,13 +475,25 @@ defmodule Zekkyou.Tasks do
   defp task_status(_, _, _), do: "queued"
 
   defp cancel_task(state, id) do
-    case state.active[id] do
-      %{run_id: run} ->
-        with :ok <- Runs.cancel(Service.registry(state.name), run, "user"),
-             do: {:ok, %{"task_id" => id, "status" => "cancellation_requested"}}
+    case OperationLog.status(state.ledger, id) do
+      {:checkpointed, _, _} ->
+        with {:ok, recovered} <- OperationLog.recovery(state.ledger, id),
+             {:ok, _} <-
+               OperationLog.resume_checkpoint(state.ledger, id, recovered.revision, %{
+                 "decision" => "cancel"
+               }) do
+          cancel_pending(state, id)
+        end
 
-      nil ->
-        cancel_pending(state, id)
+      _ ->
+        case state.active[id] do
+          %{run_id: run} ->
+            with :ok <- Runs.cancel(Service.registry(state.name), run, "user"),
+                 do: {:ok, %{"task_id" => id, "status" => "cancellation_requested"}}
+
+          nil ->
+            cancel_pending(state, id)
+        end
     end
   end
 
@@ -520,6 +596,7 @@ defmodule Zekkyou.Tasks do
       result =
         if record.status == :claimed do
           case OperationLog.status(state.ledger, operation_key(record)) do
+            {:checkpointed, _, _} -> Queue.ack(state.queue, record.claim_id)
             {:decided, _, _} -> Queue.ack(state.queue, record.claim_id)
             _ -> Queue.release(state.queue, record.claim_id)
           end
@@ -533,7 +610,7 @@ defmodule Zekkyou.Tasks do
 
   defp task_summary(task) do
     task
-    |> Map.drop(["evidence"])
+    |> Map.drop(["evidence", "approval"])
     |> Map.put("task", String.slice(task["task"] || "", 0, 120))
     |> Map.put("task_preview", true)
   end
@@ -553,25 +630,30 @@ defmodule Zekkyou.Tasks do
   end
 
   defp repair_admission(state, id) do
-    case find_record(state, id) do
-      {:ok, _} ->
+    {:ok, recovered} = OperationLog.recovery(state.ledger, id)
+
+    cancelling =
+      get_in(recovered, [:checkpoint_decision, "decision"]) == "cancel" and
+        recovered.revision == Map.get(recovered, :checkpoint_grant_revision)
+
+    cond do
+      cancelling ->
+        # The old checkpoint claim can still exist if cancellation raced its
+        # ack. Persist rejection before releasing or reclaiming any delivery.
+        with :ok <-
+               OperationLog.reject_intended(state.ledger, id, recovered.revision, %{
+                 status: "cancelled"
+               }),
+             do: remove_cancelled_record(state, id)
+
+      match?({:ok, _}, find_record(state, id)) ->
         :ok
 
-      {:error, :not_found} ->
-        {:ok, recovered} = OperationLog.recovery(state.ledger, id)
+      recovered.current_attempt ->
+        restore_if_retry(state, id, :retry_permitted, recovered)
 
-        if recovered.current_attempt do
-          # The retry grant was written before queue restoration. Finish that
-          # already-authorized admission using the grant's idempotent revision.
-          restore_if_retry(state, id, :retry_permitted, recovered)
-        else
-          # An intent with no attempt and no queue entry can arise when the
-          # process stopped after cancelling the pending entry. No dispatch
-          # occurred; finish recording its cancellation without running it.
-          OperationLog.reject_intended(state.ledger, id, recovered.revision, %{
-            status: "cancelled"
-          })
-        end
+      true ->
+        OperationLog.reject_intended(state.ledger, id, recovered.revision, %{status: "cancelled"})
     end
   end
 

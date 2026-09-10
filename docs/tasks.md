@@ -11,9 +11,14 @@ zekkyou tasks
 zekkyou task ID
 zekkyou task-cancel ID
 zekkyou task-reconcile ID committed|failed|retry --revision N --note TEXT
+zekkyou task-decide ID approve|deny --revision N
 ```
 
 Scheduling is bounded in the trusted service configuration. For example:
+
+task-decide submits a fenced operator decision for a task using its current
+positive revision. The decision is limited to approve or deny; the service
+validates the revision again before applying it.
 
 ```elixir
 Zekkyou.Config.new(
@@ -70,7 +75,37 @@ The `scheduled/` profile prefix is reserved internally. Retention is bounded:
 completed task identities can eventually be evicted; an idempotency key is not
 an indefinite duplicate-delivery guarantee.
 
-The existing approval policies still wait on live front-end connections and
-fail closed when unavailable. Durable approval checkpoints are planned for a
-later milestone, so an approval wait that crosses the resident execution
-boundary must be handled as operator work according to the configured timeout.
+Durable approval is enabled explicitly in each trusted Alto profile:
+
+```elixir
+Alto.Config.new(
+  provider: nil,
+  loop: Alto.rule_loop(steps: ["write_file"]),
+  tools: [Alto.Tools.WriteFile],
+  approval: Alto.Approvals.Checkpoint,
+  checkpoint_version: "write-v1"
+)
+```
+
+`examples/approved-write.exs` is a runnable configuration for this real file
+operation. Required approvals become `waiting_approval`, persist their exact
+prepared operation and continuation in Alto, and release the worker slot. The
+terminal's Ctrl+A/Ctrl+D controls approve or deny the saved decision; the CLI
+uses `task-decide ID approve|deny --revision N`. The decision survives restart
+and is written before the continuation is readmitted. Ordinary text cannot
+start a follow-up while a task is awaiting approval. Cancellation is durable.
+
+Approved continuations do not repeat earlier effects or tool preparation, and
+healthy approval segments do not consume the ordinary retry allowance. Saved
+budgets preserve consumed effects and model requests; waiting for a decision
+pauses active execution time. Current stricter limits still apply. A changed
+file can invalidate a saved prepared write even after approval.
+
+Alto's shipped Default, Chat and Rule loops support explicit checkpoint
+reconstruction. Custom loops need the same callbacks. Checkpoints reject live
+process capabilities, unsupported data and changed loop/tool fingerprints;
+child runs do not independently suspend a shared parent. Provider credentials
+are re-resolved on the host, while exact messages and prepared tool data remain
+in private state. This is an explicit continuation contract, not arbitrary
+process serialization. Existing Socket approvals retain their live-wait policy.
+Unknown effects after a resumed dispatch still require operator review.

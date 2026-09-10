@@ -82,7 +82,10 @@ defmodule Zekkyou.Console do
 
   defp do_perform(model, {:select, id}, _owner) do
     if Enum.any?(model.tasks, &(&1.id == id)),
-      do: load_history(reset_history(%{model | selected_id: id, notice: ""})),
+      do:
+        reset_history(%{model | selected_id: id, notice: ""})
+        |> load_task_detail()
+        |> load_history(),
       else: %{model | notice: "Task is no longer available"}
   end
 
@@ -101,7 +104,15 @@ defmodule Zekkyou.Console do
       byte_size(text) > 32_000 ->
         %{model | notice: "Message exceeds 32000 bytes"}
 
-      task && task.status in ["running", "waiting", "queued", "starting", "awaiting_admission"] ->
+      task &&
+          task.status in [
+            "running",
+            "waiting",
+            "queued",
+            "starting",
+            "awaiting_admission",
+            "waiting_approval"
+          ] ->
         %{model | notice: "This task is still running; start a new task for independent work"}
 
       task && task.status == "requires_operator" ->
@@ -134,7 +145,14 @@ defmodule Zekkyou.Console do
   defp do_perform(model, :cancel, _owner) do
     case selected(model) do
       %{durable: true, id: id, status: status}
-      when status in ["running", "waiting", "queued", "starting", "awaiting_admission"] ->
+      when status in [
+             "running",
+             "waiting",
+             "queued",
+             "starting",
+             "awaiting_admission",
+             "waiting_approval"
+           ] ->
         task_command(model.client, "cancel", %{"id" => id})
         refresh(%{model | notice: "Cancellation requested"})
 
@@ -165,6 +183,22 @@ defmodule Zekkyou.Console do
   end
 
   defp do_perform(model, decision, _owner) when decision in [:approve, :deny] do
+    case selected(model) do
+      %{durable: true, status: "waiting_approval", id: id, revision: revision} ->
+        task_command(model.client, "decide", %{
+          "id" => id,
+          "revision" => revision,
+          "decision" => Atom.to_string(decision)
+        })
+
+        refresh(%{model | notice: "Decision sent"})
+
+      _ ->
+        live_decision(model, decision)
+    end
+  end
+
+  defp live_decision(model, decision) do
     case selected_approvals(model) do
       [] ->
         %{model | notice: "No pending decision for this task"}
@@ -277,6 +311,7 @@ defmodule Zekkyou.Console do
           durable: true,
           revision: task["revision"],
           evidence: %{},
+          approval: nil,
           title: clean(task["task"]),
           status: status,
           config: task["profile"],
@@ -297,7 +332,8 @@ defmodule Zekkyou.Console do
           task
           | title: clean(detail["task"]),
             evidence: detail["evidence"],
-            usage: detail["evidence"]["usage"] || task.usage
+            approval: detail["approval"],
+            usage: detail["evidence"]["usage"] || detail["usage"] || task.usage
         }
 
         %{
@@ -479,6 +515,13 @@ defmodule Zekkyou.Console do
   defp selected(model), do: Enum.find(model.tasks, &(&1.id == model.selected_id))
 
   defp selected_approvals(model) do
+    case selected(model) do
+      %{status: "waiting_approval", approval: approval} when is_map(approval) -> [approval]
+      _ -> live_approvals(model)
+    end
+  end
+
+  defp live_approvals(model) do
     run =
       case selected(model) do
         nil -> nil

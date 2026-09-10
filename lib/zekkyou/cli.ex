@@ -20,6 +20,7 @@ defmodule Zekkyou.CLI do
   zekkyou task ID [--socket PATH]
   zekkyou task-cancel ID [--socket PATH]
   zekkyou task-reconcile ID committed|failed|retry --revision N --note TEXT [--socket PATH]
+  zekkyou task-decide ID approve|deny --revision N [--socket PATH]
 
   Serve owns execution. Closing status/watch clients does not stop agents.
   Configuration is trusted Elixir code. Use SSH socket forwarding for remote access.
@@ -159,6 +160,24 @@ defmodule Zekkyou.CLI do
          })}
     end
   end
+
+  defp command(["task-decide", id, decision], opts) when decision in ["approve", "deny"] do
+    revision = Keyword.get(opts, :revision)
+
+    if is_integer(revision) and revision > 0 do
+      {:ok,
+       command_wire("tasks.decide", %{
+         "id" => id,
+         "revision" => revision,
+         "decision" => decision
+       })}
+    else
+      {:error, {:invalid_task_decide, :revision}}
+    end
+  end
+
+  defp command(["task-decide", _id, _decision], _opts),
+    do: {:error, {:invalid_task_decide, :decision}}
 
   defp command([decision, request], _) when decision in ["approve", "deny"],
     do:

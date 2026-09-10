@@ -9,7 +9,7 @@ Development is in progress; this is not yet the unattended-operation release.
 
 ## Development
 
-The dependency pins Alto commit `711aee97db68b5ed50ddae3a55b61c3d16bf92b1`,
+The dependency pins Alto commit `ab97a1b678d6957da7be777f4304c1bbca9fc2df`,
 which adds durable replay, owner-bound runs and delayed queue scheduling on top
 of the clean public v0.0.1 release. That revision is currently **local and
 unpublished** on `zekkyou/durable-host`. Until it is published, set `ALTO_PATH`
@@ -31,10 +31,11 @@ python3 scripts/smoke.py
 Alto commits: `0ea2ec0` (durable replay and owner lifetime), `d9604e2` (due times
 and fenced rescheduling), `262bd13` (fresh-VM replay without unsafe term decoding),
 `8ecceaf` (resident summaries and bounded saved conversations),
-`711aee9` (fenced cancellation/recovery and trusted application commands).
+`711aee9` (fenced cancellation/recovery and trusted application commands),
+`ab97a1b` (durable approval checkpoints and exact continuations).
 Zekkyou now composes those primitives into bounded durable tasks with delayed
 admission, cancellation, and explicit operator recovery. See [task commands](docs/tasks.md).
-Durable tool-approval checkpoints remain under development.
+Durable tool approvals use Alto's explicit checkpoint contract.
 
 Alto uses `flock` for cross-process state ownership. The server requires no
 native terminal renderer. Provider and external tool requirements depend on
@@ -119,8 +120,11 @@ bounded activity history alongside it. Progress appears as Alto records events;
 this initial client does not render token-by-token streaming. Durable tasks
 retain their profile after restart; when following up on an older direct-run
 session, choose the profile explicitly.
-Approval replay currently survives client disconnects while the service is
-alive; durable approval recovery belongs to milestone 4.
+Profiles using `Alto.Approvals.Checkpoint` and an explicit `checkpoint_version`
+persist pending tool approvals, release their worker slot, and survive service
+restart. Ctrl+A/Ctrl+D also decide these saved approvals. Existing Socket
+approval policies continue to use live waits. See [task and approval configuration](docs/tasks.md)
+and the runnable `examples/approved-write.exs` file-write profile.
 
 ## Remote access
 

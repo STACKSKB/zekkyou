@@ -86,8 +86,10 @@ recovery, integration and review with the lead agent. Hosted CI is out of scope.
   `262bd13` makes replay independent of atoms loaded in the old VM;
   `8ecceaf` supplies run summaries and saved conversations for reconnecting clients;
   `711aee9` adds fenced rejection, per-grant recovery admission, application
-  commands, and authoritative owner-bound results.
-- Zekkyou pins `711aee97db68b5ed50ddae3a55b61c3d16bf92b1`. These Alto changes
+  commands, and authoritative owner-bound results;
+  `ab97a1b` adds durable approval checkpoints, declared continuation snapshots
+  and budget restoration.
+- Zekkyou pins `ab97a1b678d6957da7be777f4304c1bbca9fc2df`. These Alto changes
   remain local on `zekkyou/durable-host` in `/home/three/code/alto`; use
   `ALTO_PATH` until that revision is published. The initial independent checkout
   in `.work/alto` has been superseded by this normal Alto checkout.
@@ -100,7 +102,7 @@ recovery, integration and review with the lead agent. Hosted CI is out of scope.
   Reconnection reopens the tunnel without restarting work.
 - Alto now supplies resident summaries and bounded saved transcript snapshots;
   Zekkyou retains application presentation and transport policy.
-- Validation: 34 service/client/transport tests and 13 terminal tests, including
+- Validation: 42 service/client/transport tests and 13 terminal tests, including
   a real native headless terminal driving a resident task across detach/reconnect.
   Two clients recover identical conversations and follow-up messages; saved
   conversation survives service restart. The standalone service smoke check
@@ -119,14 +121,21 @@ recovery, integration and review with the lead agent. Hosted CI is out of scope.
   queued tasks are selectable before execution, cancellation covers waiting work,
   and operator review commands carry the viewed revision and an explanatory note.
   Reconnect recovers task state and recorded outcomes.
-- Milestone 4 remains incomplete. Durable approval checkpoints, final
-  service-packaging and full unattended qualification are still pending. Current approvals remain live waits and can park
-  work when their execution boundary is crossed.
-- Next implementation: explicit durable approval/checkpoint contracts in Alto
-  and their Zekkyou policy. Arbitrary loop state cannot safely be serialized or
-  replayed; start with declared reconstructible boundaries and retain budgets,
-  operation identities and revision fences. Remote qualification follows when
-  a host is available.
+- Durable approvals are implemented in Alto: explicit suspended ledger state,
+  exact prepared operation and continuation capture, optional loop snapshot
+  callbacks, version/code checks, budget restoration, and revision-fenced host
+  decisions. Zekkyou uses these APIs to free workers and resume saved approvals
+  through CLI and terminal controls. No earlier effect or preparation is replayed.
+- Independent-VM qualification verifies suspension, independent work, restart,
+  exact prepared-value continuation, and completion replay in a third VM.
+  Tests also cover model/tool batches, repeated approval segments under a single
+  retry allowance, denial, cancellation gaps, and stale prepared file writes.
+- Milestone 4 still needs final service packaging and operational qualification.
+  Custom loops must declare serializable continuations; arbitrary live state and
+  independently suspended child runs are not supported by this checkpoint path.
+- Next implementation: service packaging and bounded subagent/mailbox policy,
+  extending shared Alto contracts where needed. Remote qualification follows
+  when a host is available.
 - Automatic safe recovery, concurrent agent coordination, memory/skills and
   messaging adapters remain pending. The existing queue extension is a
   mechanism, not that application.
