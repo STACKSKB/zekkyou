@@ -388,13 +388,14 @@ defmodule Zekkyou.Tasks do
     do: {:park, {:runner_failed_without_result, reason}}
 
   defp task_outcome(result, run, session) do
-    {status, value} =
+    {status, value, reason} =
       case result do
         {:ok, value} ->
-          {"completed", value}
+          {"completed", value, nil}
 
         {:error, reason, value} ->
-          {if(match?({:cancelled, _}, reason), do: "cancelled", else: "failed"), value}
+          {if(match?({:cancelled, _}, reason), do: "cancelled", else: "failed"), value,
+           reason |> inspect(limit: 10, printable_limit: 2_048) |> String.slice(0, 2_048)}
       end
 
     class =
@@ -404,15 +405,17 @@ defmodule Zekkyou.Tasks do
         {_, verdict} -> verdict
       end
 
-    {:outcome, class,
-     %{
-       run_id: run,
-       session_id: session,
-       status: status,
-       usage: value.usage,
-       agent_identity: Map.get(value, :agent_identity),
-       persistence: value.persistence
-     }}
+    evidence = %{
+      run_id: run,
+      session_id: session,
+      status: status,
+      usage: value.usage,
+      agent_identity: Map.get(value, :agent_identity),
+      persistence: value.persistence
+    }
+
+    evidence = if is_nil(reason), do: evidence, else: Map.put(evidence, :reason, reason)
+    {:outcome, class, evidence}
   end
 
   defp describe(state, id) do

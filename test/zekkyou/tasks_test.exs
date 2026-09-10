@@ -8,6 +8,13 @@ defmodule Zekkyou.TasksTest do
     def handle_event(_, state, _), do: Alto.Transition.continue(state)
   end
 
+  defmodule Failure do
+    @behaviour Alto.Loop
+    def init("limit", _), do: Alto.Transition.error(nil, {:model_request_limit, 2})
+    def init(task, _), do: Alto.Transition.error(nil, task)
+    def handle_event(_, state, _), do: Alto.Transition.continue(state)
+  end
+
   defmodule Controlled do
     @behaviour Alto.Provider
     def describe(_), do: %{}
@@ -52,6 +59,7 @@ defmodule Zekkyou.TasksTest do
         scheduling: [poll_ms: 10, workers: 2, run_timeout: 5_000],
         profiles: %{
           "echo" => Alto.Config.new(provider: nil, loop: Alto.loop(Echo)),
+          "failure" => Alto.Config.new(provider: nil, loop: Alto.loop(Failure)),
           "effect" =>
             Alto.Config.new(
               provider: nil,
@@ -71,6 +79,26 @@ defmodule Zekkyou.TasksTest do
     start_supervised!({Service, config: config, name: name})
     on_exit(fn -> File.rm_rf!(dir) end)
     %{name: name, config: config}
+  end
+
+  test "bounded failure explanations survive service restart", %{name: name, config: config} do
+    for {id, task} <- [{"limit", "limit"}, {"large", String.duplicate("🦀", 3_000)}] do
+      assert {:ok, _} =
+               Tasks.command(name, "submit", %{"id" => id, "profile" => "failure", "task" => task})
+
+      failed = eventually(name, id, "failed")
+      reason = failed["evidence"]["reason"]
+      assert is_binary(reason) and String.valid?(reason)
+      assert String.length(reason) <= 2_048
+    end
+
+    before = eventually(name, "limit", "failed")
+    assert before["evidence"]["reason"] == "{:model_request_limit, 2}"
+    stop_supervised!(Service)
+    start_supervised!({Service, config: config, name: name})
+
+    assert eventually(name, "limit", "failed")["evidence"]["reason"] ==
+             before["evidence"]["reason"]
   end
 
   test "delayed tasks persist through restart and duplicate admission never replaces work", %{

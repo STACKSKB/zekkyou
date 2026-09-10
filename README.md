@@ -9,7 +9,7 @@ Development is in progress; this is not yet the unattended-operation release.
 
 ## Development
 
-The dependency pins Alto commit `04e78f3444fa3f01bc4992dc541ce1f49c167e90`,
+The dependency pins Alto commit `f56da63fdb2503d760bb26665d296a17d74a12f5`,
 which adds durable replay, owner-bound runs and delayed queue scheduling on top
 of the clean public v0.0.1 release. That revision is currently **local and
 unpublished** on `zekkyou/durable-host`. Until it is published, set `ALTO_PATH`

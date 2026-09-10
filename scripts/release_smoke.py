@@ -21,6 +21,7 @@ import smoke
 import team_smoke
 import workspace_smoke
 import patch_integration_smoke
+import budget_smoke
 
 
 def check_private(state):
@@ -171,6 +172,7 @@ def main(archive):
             team_smoke.main(mailboxes=True)
             workspace_smoke.main()
             patch_integration_smoke.main()
+            budget_smoke.main()
             interrupted_run(base)
         finally:
             os.chdir(previous_cwd)

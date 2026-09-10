@@ -196,6 +196,35 @@ transcripts and CLI histories are identical across the lead's approval restart
 and another service restart after completion. Workers execute only once. The
 full regression's team scenarios now include these additional checks.
 
+## Durable shared count-budget increment
+
+Alto `f56da63` passes 764 tests, formatting and production compilation.
+Tests cover retained-checkpoint CAS updates, stale revisions, full-log refusal,
+terminal-state fencing, torn-tail repair and duplicate update rejection. Budget
+tests cover concurrent caps, generation binding, consistent reads, reopening
+without widening, tightening existing handles, ledger failure, closure and key
+reuse, and restored runners sharing charges made after the saved snapshot.
+Approval continuation retains the exact prepared value across a ledger restart.
+Three separate VMs verify an old snapshot cannot replenish model calls: a later
+charge remains consumed, two restored handles share one remaining call, and a
+third VM recovers the exhausted allowance.
+
+These are durable count budgets. Coordinated child active-time accounting,
+durable child dispatch and parent joins remain pending.
+
+Zekkyou passes 66 service tests and 13 terminal tests with the recorded seed.
+Task failure explanations are now retained as bounded text in durable evidence,
+including budget denials. Tests verify their size, UTF-8 validity and survival
+across service restart.
+
+The relocated bundled regression passes with the new budget scenario included.
+Four fresh service VMs share a two-request account through trusted profiles:
+the first two jobs invoke the provider once each, and later jobs persist an
+explicit model-budget failure without invoking it again. The durable counter
+remains two across configuration reloads. Scheduling, approvals, separate child
+sessions, mailboxes, workspace capture/integration, crash review and shutdown
+cleanup also pass against this bundle.
+
 ## Remaining qualification and limits
 
 - No live model provider, remote SSH daemon, or Discord integration was tested.

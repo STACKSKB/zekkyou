@@ -60,6 +60,11 @@ ids fence stale workers. Queue, ledger, payload, attempt, and outcome bounds
 come from the scheduling configuration; each scheduled profile is additionally
 capped by those limits and by the configured run timeout.
 
+`task ID` retains a bounded failure explanation in `evidence.reason`, including
+budget denials, so a reconnect can show why execution stopped. These explanations
+are limited to 2,048 characters; the authoritative outcome class and task state
+remain separate fields.
+
 Unknown work is parked as `requires_operator` after a restart, timeout, or
 other uncertain boundary. Retry is an explicit operator decision: inspect the
 task revision with `task ID`, then reconcile it with a nonempty explanatory

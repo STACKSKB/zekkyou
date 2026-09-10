@@ -99,8 +99,10 @@ recovery, integration and review with the lead agent. Hosted CI is out of scope.
   and conservative interruption handling; `e487d8e` adds opt-in queue compaction
   preserving retained records, active claims and completed delivery identities;
   `04e78f3` adds optional separate child sessions, transcript ownership and
-  durable parent/identity links in histories and results.
-- Zekkyou pins `04e78f3444fa3f01bc4992dc541ce1f49c167e90`. These Alto changes
+  durable parent/identity links in histories and results; `f56da63` adds optional
+  durable shared count budgets with fenced retained-state updates, account
+  generations, nonincreasing caps and explicit retirement.
+- Zekkyou pins `f56da63fdb2503d760bb26665d296a17d74a12f5`. These Alto changes
   remain local on `zekkyou/durable-host` in `/home/three/code/alto`; use
   `ALTO_PATH` until that revision is published. The initial independent checkout
   in `.work/alto` has been superseded by this normal Alto checkout.
@@ -113,7 +115,7 @@ recovery, integration and review with the lead agent. Hosted CI is out of scope.
   Reconnection reopens the tunnel without restarting work.
 - Alto now supplies resident summaries and bounded saved transcript snapshots;
   Zekkyou retains application presentation and transport policy.
-- Validation: 65 service/client/transport tests and 13 terminal tests, including
+- Validation: 66 service/client/transport tests and 13 terminal tests, including
   a real native headless terminal driving a resident task across detach/reconnect.
   Two clients recover identical conversations and follow-up messages; saved
   conversation survives service restart. The standalone service smoke check
@@ -202,8 +204,13 @@ recovery, integration and review with the lead agent. Hosted CI is out of scope.
   live parent. Fresh-VM checks recover the parent and child histories exactly.
 - Milestone 5 still needs independent child lifecycle/recovery. A workspace resource is not an independently resumable child job. The full integration
   gate remains outstanding.
+- Alto's durable effect/model-count accounts are implemented. Trusted Zekkyou
+  profiles can supply an account; restored budgets reconnect to its current
+  counters instead of cloning a snapshot. Default task budgets retain their
+  existing behavior. Automatic per-tree account lifecycle and coordinated active
+  time across independently suspended children still need dispatch/join ownership.
 - Next implementation: independent child lifecycle/recovery,
-  including durable shared budgets, child dispatch records and recoverable
+  including shared active-time accounting, child dispatch records and recoverable
   parent joins in Alto. Remote qualification follows
   when a host is available.
 - Recovery now restores queued work and explicitly approved checkpoints; uncertain

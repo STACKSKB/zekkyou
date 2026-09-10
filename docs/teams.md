@@ -69,6 +69,22 @@ replace tool implementations/options, widen model exposure or increase the
 parent's depth allowance. Cancelling the lead cancels active children and leaves
 queued children unstarted. Killing the parent also cancels its active children.
 
+Trusted Alto profiles can supply an already opened
+`Alto.Runner.Budget.Account` through `budget_account:`. The host owns and
+supervises its `Alto.OperationLog`. The account persists shared effect and model
+request counts, including charges made after an approval snapshot was captured.
+Restoration must supply the same account generation; reopening cannot widen
+its caps. Sharing one account across profiles or tasks intentionally shares one
+allowance. The default remains a live shared counter, with consumed counts saved
+in supported root checkpoints.
+
+This option persists count limits only. Root approval pauses keep their existing
+active-time semantics; coordinated active time for independent child jobs remains
+pending. Counts are not token or currency limits. Hosts retire accounts only
+after their execution tree ends, using the viewed revision; closure prevents
+future reservations but does not cancel already dispatched effects. Per-task
+automatic account creation and retirement await durable child lifecycle ownership.
+
 Results return in assignment order and enter the lead's bounded conversation as
 `alto_subagent_results`. Token usage includes descendant usage; the result's
 `model_requests` field remains the lead's own request count. Unknown child
