@@ -88,8 +88,9 @@ recovery, integration and review with the lead agent. Hosted CI is out of scope.
   `711aee9` adds fenced rejection, per-grant recovery admission, application
   commands, and authoritative owner-bound results;
   `ab97a1b` adds durable approval checkpoints, declared continuation snapshots
-  and budget restoration.
-- Zekkyou pins `ab97a1b678d6957da7be777f4304c1bbca9fc2df`. These Alto changes
+  and budget restoration; `ec5e3fa` fixes listener cleanup during supervised
+  shutdown and recovery after acceptor failure.
+- Zekkyou pins `ec5e3fa6c1416b2b977a946be798d53f0572e3a3`. These Alto changes
   remain local on `zekkyou/durable-host` in `/home/three/code/alto`; use
   `ALTO_PATH` until that revision is published. The initial independent checkout
   in `.work/alto` has been superseded by this normal Alto checkout.
@@ -110,7 +111,7 @@ recovery, integration and review with the lead agent. Hosted CI is out of scope.
 - Milestone 3 implementation is committed; live remote SSH/reconnect
   qualification remains outstanding because no SSH host is configured.
   Native terminal libraries require the on-disk launcher, not an escript.
-- Milestone 4 is partially implemented: Zekkyou now has a durable scheduled-task
+- Milestone 4 scheduling is implemented: Zekkyou now has a durable scheduled-task
   policy backed by Alto's bounded queue and operation ledger, including due-time
   admission, worker limits, run budgets, lease fencing, explicit cancellation,
   conservative interrupted-run parking, revisioned operator reconciliation, and
@@ -130,12 +131,19 @@ recovery, integration and review with the lead agent. Hosted CI is out of scope.
   exact prepared-value continuation, and completion replay in a third VM.
   Tests also cover model/tool batches, repeated approval segments under a single
   retry allowance, denial, cancellation gaps, and stale prepared file writes.
-- Milestone 4 still needs final service packaging and operational qualification.
+- Milestone 4 service packaging and local operational qualification are implemented:
+  a relocatable release bundles Erlang/Elixir, the CLI, examples and systemd unit.
+  Archive checks pass without system Erlang/Elixir/Mix on PATH and verify real
+  execution, exact argument forwarding, private state, single-owner startup,
+  scheduled work, checkpoint recovery, interrupted-effect review and SIGTERM cleanup.
+  A transient local systemd unit passes automatic crash restart, delayed execution,
+  history/task recovery after another restart, and complete shutdown. No persistent
+  unit was installed or enabled. Remote-host qualification remains outstanding.
   Custom loops must declare serializable continuations; arbitrary live state and
   independently suspended child runs are not supported by this checkpoint path.
-- Next implementation: service packaging and bounded subagent/mailbox policy,
+- Next implementation: bounded subagent/mailbox policy and isolated workspaces,
   extending shared Alto contracts where needed. Remote qualification follows
   when a host is available.
-- Automatic safe recovery, concurrent agent coordination, memory/skills and
-  messaging adapters remain pending. The existing queue extension is a
-  mechanism, not that application.
+- Recovery now restores queued work and explicitly approved checkpoints; uncertain
+  dispatched effects remain parked for operator reconciliation. Concurrent agent
+  coordination, memory/skills and messaging adapters remain pending.

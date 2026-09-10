@@ -9,7 +9,7 @@ Development is in progress; this is not yet the unattended-operation release.
 
 ## Development
 
-The dependency pins Alto commit `ab97a1b678d6957da7be777f4304c1bbca9fc2df`,
+The dependency pins Alto commit `ec5e3fa6c1416b2b977a946be798d53f0572e3a3`,
 which adds durable replay, owner-bound runs and delayed queue scheduling on top
 of the clean public v0.0.1 release. That revision is currently **local and
 unpublished** on `zekkyou/durable-host`. Until it is published, set `ALTO_PATH`
@@ -32,7 +32,8 @@ Alto commits: `0ea2ec0` (durable replay and owner lifetime), `d9604e2` (due time
 and fenced rescheduling), `262bd13` (fresh-VM replay without unsafe term decoding),
 `8ecceaf` (resident summaries and bounded saved conversations),
 `711aee9` (fenced cancellation/recovery and trusted application commands),
-`ab97a1b` (durable approval checkpoints and exact continuations).
+`ab97a1b` (durable approval checkpoints and exact continuations),
+`ec5e3fa` (socket listener cleanup during supervised shutdown).
 Zekkyou now composes those primitives into bounded durable tasks with delayed
 admission, cancellation, and explicit operator recovery. See [task commands](docs/tasks.md).
 Durable tool approvals use Alto's explicit checkpoint contract.
@@ -40,6 +41,11 @@ Durable tool approvals use Alto's explicit checkpoint contract.
 Alto uses `flock` for cross-process state ownership. The server requires no
 native terminal renderer. Provider and external tool requirements depend on
 your trusted configuration.
+
+For an installation that includes its own Erlang/Elixir runtime, build the
+bundled service release with `MIX_ENV=prod mix release`. The archive includes
+the CLI, examples and systemd unit. See the [installation guide](deploy/README.md)
+for build qualification, configuration, restart and upgrade instructions.
 
 ## Run a resident service
 

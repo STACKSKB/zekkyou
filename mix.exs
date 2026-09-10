@@ -8,6 +8,13 @@ defmodule Zekkyou.MixProject do
       elixir: "~> 1.18",
       start_permanent: Mix.env() == :prod,
       escript: [main_module: Zekkyou.CLI],
+      releases: [
+        zekkyou: [
+          include_executables_for: [:unix],
+          include_src: false,
+          steps: [:assemble, &package_service/1, :tar]
+        ]
+      ],
       deps: deps()
     ]
   end
@@ -16,13 +23,23 @@ defmodule Zekkyou.MixProject do
     [extra_applications: [:logger, :crypto], mod: {Zekkyou.Application, []}]
   end
 
+  defp package_service(release) do
+    files =
+      for source <- ["deploy", "examples", "docs", "README.md", "ROADMAP.md", "VALIDATION.md"],
+          path <- File.cp_r!(source, Path.join(release.path, source)),
+          File.regular?(path),
+          do: Path.relative_to(path, release.path)
+
+    %{release | overlays: release.overlays ++ files}
+  end
+
   defp deps do
     alto =
       case System.get_env("ALTO_PATH") do
         nil ->
           {:alto,
            git: "https://github.com/STACKSKB/alto.git",
-           ref: "ab97a1b678d6957da7be777f4304c1bbca9fc2df"}
+           ref: "ec5e3fa6c1416b2b977a946be798d53f0572e3a3"}
 
         path ->
           {:alto, path: Path.expand(path)}

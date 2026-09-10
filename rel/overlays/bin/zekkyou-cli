@@ -1,0 +1,8 @@
+#!/bin/sh
+set -eu
+
+# Keep arguments as arguments: task text and paths are never evaluated as code.
+zekkyou_release_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+export RELEASE_DISTRIBUTION=none
+umask 077
+exec "$zekkyou_release_root/bin/zekkyou" eval 'Zekkyou.Release.main(System.argv())' "$@"

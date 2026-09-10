@@ -24,17 +24,19 @@ revision is published.
   command scoping, and running-task selection.
   A real ExRatatui headless terminal submits to a real resident service,
   detaches during execution, reconnects, and verifies the rendered answer.
-- Alto: **672 regression tests passed** with `--max-cases 4`, covering the
+- Alto: **674 regression tests passed** with `--max-cases 4`, covering the
   shared queue/ledger recovery changes and application command envelope bounds.
   Checkpoint tests cover exact continuation and prepared-value restoration,
   model/tool batches, budget preservation, unsupported capabilities,
-  configuration mismatch, and bounded custom snapshot callbacks.
+  configuration mismatch, and bounded custom snapshot callbacks. Listener tests
+  also verify supervised socket cleanup and termination after acceptor failure.
 - Compilation with warnings as errors and formatting checks passed for the
   service and terminal package; Alto's core compilation passed as well.
 - The terminal launcher was exercised in a real PTY through startup,
   connection-failure display, and Ctrl+Q teardown. The native renderer cannot
   load from a single-file escript, so the terminal uses `bin/zekkyou-tui`
-  with compiled libraries on disk. The service remains a separate escript.
+  with compiled libraries on disk. The service has an escript and a bundled
+  release with its own Erlang/Elixir runtime.
 
 ## Independent-process qualification
 
@@ -52,6 +54,22 @@ work. The second recovers the same request/revision, approves, and executes the
 original prepared value after its input changed. The third confirms completion
 without another effect.
 
+`python3 -B scripts/release_smoke.py _build/prod/zekkyou-0.0.1-dev.tar.gz`
+passes against the extracted release in a separate directory containing spaces,
+with system Erlang/Elixir/Mix absent from PATH. It runs the execution and
+checkpoint smoke scenarios through the bundled CLI, checks exact forwarding of
+task text containing shell syntax and newlines, rejects invalid configuration and
+duplicate service ownership, verifies private state, and confirms that a crash
+after an external file effect parks the task across subsequent restarts. SIGTERM
+to the main PID exits the VM and removes its listener socket.
+
+`python3 -B scripts/systemd_smoke.py _build/prod/rel/zekkyou` passes against a
+temporary local user unit. systemd restarts the killed main VM, admitted delayed
+work completes, and another restart preserves task status, session identity and
+event history. Stopping the unit leaves it inactive and removes the socket.
+The unit template also passes `systemd-analyze verify` with its installation
+paths substituted for this build. No persistent unit was installed or enabled.
+
 SSH tests use a controlled executable that binds a real local Unix socket.
 They check OpenSSH arguments, private directory permissions, owner death,
 startup timeout, cleanup and actual child OS-process termination. These tests
@@ -60,7 +78,8 @@ exercise transport management; they do not constitute remote-host qualification.
 ## Remaining qualification and limits
 
 - No live model provider, remote SSH daemon, or Discord integration was tested.
-  No persistent service or systemd unit was installed on this machine.
+  Only a temporary local systemd unit was exercised; no persistent service or
+  systemd unit was installed on this machine.
 - Completed history survives restart. Interrupted work is not automatically
   retried. Checkpoint-enabled approvals survive service restart; Socket approvals
   retain their live-wait contract. Scheduled attempts with uncertain outcomes
@@ -78,5 +97,5 @@ exercise transport management; they do not constitute remote-host qualification.
   reject live capabilities or incompatible code/configuration. Independently
   suspended child runs remain unsupported. Waiting for approval pauses active
   execution time; consumed budget counters are preserved.
-- Agent coordination, memory/skills, messaging adapters, final packaging and
+- Agent coordination, memory/skills, messaging adapters and
   live remote qualification remain pending. No changes were pushed or published.

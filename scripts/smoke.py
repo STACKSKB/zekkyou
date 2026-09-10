@@ -63,9 +63,10 @@ def command(environment, socket_path, *arguments):
     return [json.loads(line) for line in result.stdout.splitlines() if line.startswith("{")]
 
 
-def main():
-    with zipfile.ZipFile(EXECUTABLE) as artifact:
-        assert not any("ex_ratatui" in name for name in artifact.namelist())
+def main(verify_escript=True):
+    if verify_escript:
+        with zipfile.ZipFile(EXECUTABLE) as artifact:
+            assert not any("ex_ratatui" in name for name in artifact.namelist())
 
     with tempfile.TemporaryDirectory(prefix="zekkyou-executable-") as temporary:
         base = Path(temporary)

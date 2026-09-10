@@ -5,9 +5,9 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-WorkingDirectory=%h/zekkyou
+WorkingDirectory=%h/.local/opt/zekkyou/current
 EnvironmentFile=%h/.config/zekkyou/service.env
-ExecStart=%h/zekkyou/zekkyou serve %h/.config/zekkyou/service.exs
+ExecStart=%h/.local/opt/zekkyou/current/bin/zekkyou-cli serve %h/.config/zekkyou/service.exs
 Restart=on-failure
 RestartSec=5
 KillMode=control-group
