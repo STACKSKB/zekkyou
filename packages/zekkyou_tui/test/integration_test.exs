@@ -63,7 +63,7 @@ defmodule Zekkyou.TUI.IntegrationTest do
     ready(second)
     assert state(second).model.selected_id == session
 
-    eventually(fn ->
+    terminal_eventually(second, fn ->
       Enum.any?(state(second).model.entries, &(&1.text == "Finished while detached"))
     end)
 
@@ -100,5 +100,35 @@ defmodule Zekkyou.TUI.IntegrationTest do
           Process.sleep(20)
           eventually(fun, attempts - 1)
         )
+  end
+
+  defp terminal_eventually(pid, fun, attempts \\ 100)
+
+  defp terminal_eventually(pid, _fun, 0),
+    do: flunk("terminal transcript did not arrive: #{inspect(diagnostic(pid))}")
+
+  defp terminal_eventually(pid, fun, attempts) do
+    if fun.(),
+      do: :ok,
+      else:
+        (
+          Process.sleep(20)
+          terminal_eventually(pid, fun, attempts - 1)
+        )
+  end
+
+  defp diagnostic(pid) do
+    ui = state(pid)
+    model = ui.model
+
+    %{
+      connection: model.connection,
+      selected_id: model.selected_id,
+      pending_ui_task: not is_nil(ui.pending),
+      notice: model.notice,
+      tasks: Enum.map(model.tasks, &%{id: &1.id, status: &1.status, session_id: &1.session_id}),
+      transcript_count: length(model.transcript),
+      entry_count: length(model.entries)
+    }
   end
 end
