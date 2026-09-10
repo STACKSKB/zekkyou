@@ -87,10 +87,12 @@ approval continuation preserve the completed worker results, consumed budgets
 and exact pending operation; the plan and child work are not repeated.
 Completed-session follow-ups start a new planning stage.
 
-Workers currently share the configured workspace. The supplied example gives
-workers inspection tools and reserves file editing for the lead. Isolated coding
-workspaces and separate child recovery are still pending; milestone 5 is not
-complete. Mailbox durability does not make child execution independently
+Workers share the configured workspace unless the team receives an optional
+[workspace manager](workspaces.md). The manager gives each child an independent
+Git checkout and captures a frozen patch without changing the source. The
+supplied example gives workers inspection tools and reserves file editing for
+the lead. Reviewed patch integration and separate child recovery are still
+pending; milestone 5 is not complete. Mailbox durability does not make child execution independently
 recoverable. Child runs share the parent session's
 best-effort event history, not a separate durable dispatch ledger. A crash during
 active delegation parks the containing durable task for operator review.

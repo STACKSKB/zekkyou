@@ -8,6 +8,7 @@ defmodule Zekkyou.Config do
     :profiles,
     max_retained_events: 1_000,
     runtime: Zekkyou.Runtime.Alto,
+    workspaces: [max_retained: 128, max_log_bytes: 64_000_000],
     mailbox: [
       max_messages: 1_000,
       max_completed: 10_000,
@@ -32,6 +33,7 @@ defmodule Zekkyou.Config do
           profiles: map(),
           max_retained_events: pos_integer(),
           runtime: module(),
+          workspaces: keyword(),
           mailbox: keyword(),
           scheduling: keyword()
         }
@@ -42,7 +44,16 @@ defmodule Zekkyou.Config do
 
     unknown =
       Keyword.keys(opts) --
-        [:workspace, :state_dir, :profiles, :max_retained_events, :runtime, :scheduling, :mailbox]
+        [
+          :workspace,
+          :state_dir,
+          :profiles,
+          :max_retained_events,
+          :runtime,
+          :scheduling,
+          :mailbox,
+          :workspaces
+        ]
 
     if unknown != [], do: raise(ArgumentError, "unknown service options: #{inspect(unknown)}")
     workspace = opts |> Keyword.fetch!(:workspace) |> Path.expand()
@@ -52,6 +63,7 @@ defmodule Zekkyou.Config do
     runtime = Keyword.get(opts, :runtime, Zekkyou.Runtime.Alto)
     scheduling = scheduling_options(Keyword.get(opts, :scheduling, []))
     mailbox = mailbox_options(Keyword.get(opts, :mailbox, []))
+    workspaces = workspace_options(Keyword.get(opts, :workspaces, []))
 
     unless is_atom(runtime) and Code.ensure_loaded?(runtime) and
              function_exported?(runtime, :children, 2),
@@ -79,9 +91,26 @@ defmodule Zekkyou.Config do
       profiles: profiles,
       max_retained_events: retention,
       runtime: runtime,
+      workspaces: workspaces,
       mailbox: mailbox,
       scheduling: scheduling
     }
+  end
+
+  defp workspace_options(options) do
+    defaults = [max_retained: 128, max_log_bytes: 64_000_000]
+
+    unless Keyword.keyword?(options) and Keyword.keys(options) -- Keyword.keys(defaults) == [],
+      do: raise(ArgumentError, "invalid workspace options")
+
+    settings = Keyword.merge(defaults, options)
+
+    unless is_integer(settings[:max_retained]) and settings[:max_retained] in 1..10_000 and
+             is_integer(settings[:max_log_bytes]) and
+             settings[:max_log_bytes] in 100_000..256_000_000,
+           do: raise(ArgumentError, "invalid workspace retention limits")
+
+    settings
   end
 
   defp mailbox_options(options) do

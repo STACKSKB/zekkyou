@@ -24,6 +24,10 @@ defmodule Zekkyou.CLI do
   zekkyou mailbox ROOT_RUN_ID [--cursor N] [--socket PATH]
   zekkyou mailbox-get ROOT_RUN_ID MESSAGE_KEY [--socket PATH]
   zekkyou mailbox-cancel ROOT_RUN_ID MESSAGE_KEY [--socket PATH]
+  zekkyou workspaces [--cursor N] [--socket PATH]
+  zekkyou workspace ID [--socket PATH]
+  zekkyou workspace-patch ID [--cursor N] [--socket PATH]
+  zekkyou workspace-discard ID --revision N --note TEXT [--socket PATH]
 
   Serve owns execution. Closing status/watch clients does not stop agents.
   Configuration is trusted Elixir code. Use SSH socket forwarding for remote access.
@@ -135,6 +139,29 @@ defmodule Zekkyou.CLI do
   end
 
   defp command(["tasks"], _opts), do: {:ok, command_wire("tasks.list", %{})}
+
+  defp command(["workspaces"], opts),
+    do: {:ok, command_wire("workspaces.list", %{"cursor" => Keyword.get(opts, :cursor, 0)})}
+
+  defp command(["workspace", id], _opts),
+    do: {:ok, command_wire("workspaces.get", %{"id" => id})}
+
+  defp command(["workspace-patch", id], opts),
+    do:
+      {:ok,
+       command_wire("workspaces.patch", %{"id" => id, "cursor" => Keyword.get(opts, :cursor, 0)})}
+
+  defp command(["workspace-discard", id], opts) do
+    revision = Keyword.get(opts, :revision)
+    note = Keyword.get(opts, :note)
+
+    if is_integer(revision) and revision > 0 and is_binary(note) and String.trim(note) != "" do
+      {:ok,
+       command_wire("workspaces.discard", %{"id" => id, "revision" => revision, "note" => note})}
+    else
+      {:error, :workspace_discard_requires_revision_and_note}
+    end
+  end
 
   defp command(["mailbox", root], opts),
     do:

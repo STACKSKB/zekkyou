@@ -92,8 +92,10 @@ recovery, integration and review with the lead agent. Hosted CI is out of scope.
   shutdown and recovery after acceptor failure; `da4d112` adds concurrent child
   batches, inherited tool/depth authority, owned lifetime, shared accounting,
   and bounded per-request context; `759192b` adds exact matching queue claims,
-  claimed-record wire bounds and checkpointed execution-tree identities.
-- Zekkyou pins `759192bdb591e76fe8533f2d9a429c31d319a3f2`. These Alto changes
+  claimed-record wire bounds and checkpointed execution-tree identities;
+  `4ab811a` adds durable isolated Git workspaces, worker assignment, immutable
+  patch capture and revision-fenced resource cleanup.
+- Zekkyou pins `4ab811ab58ed86ea4f141b0d41f33e27de476075`. These Alto changes
   remain local on `zekkyou/durable-host` in `/home/three/code/alto`; use
   `ALTO_PATH` until that revision is published. The initial independent checkout
   in `.work/alto` has been superseded by this normal Alto checkout.
@@ -106,7 +108,7 @@ recovery, integration and review with the lead agent. Hosted CI is out of scope.
   Reconnection reopens the tunnel without restarting work.
 - Alto now supplies resident summaries and bounded saved transcript snapshots;
   Zekkyou retains application presentation and transport policy.
-- Validation: 53 service/client/transport tests and 13 terminal tests, including
+- Validation: 56 service/client/transport tests and 13 terminal tests, including
   a real native headless terminal driving a resident task across detach/reconnect.
   Two clients recover identical conversations and follow-up messages; saved
   conversation survives service restart. The standalone service smoke check
@@ -163,11 +165,24 @@ recovery, integration and review with the lead agent. Hosted CI is out of scope.
   restore under the same root identity despite a new run ID, and are acknowledged
   without worker replay. Claim fencing, first-wins deduplication, bounds and
   recipient isolation are covered. Messages do not create or wake agents.
-- Milestone 5 still needs isolated coding workspaces, mailbox retention cleanup
-  and child lifecycle/recovery policy. Workers currently share the configured
-  workspace; they are not independent durable queue tasks. This does not yet
-  satisfy the full concurrent coding-workspace gate.
-- Next implementation: child lifecycle and isolated workspaces,
+- Isolated coding workspace capture is implemented: Alto assigns independent
+  Git clones from a single clean source commit and holds durable resource
+  checkpoints through creation, worker use and patch capture. Worker file tools
+  receive the assigned cwd. Interrupted operations remain reviewable without
+  automatic replay; frozen patches are hash-checked and explicit cleanup is
+  revision-fenced. Zekkyou supplies the resident ledger, optional team policy,
+  bounded operator inspection/patch export and discard commands.
+- Tests prove simultaneous children can edit the same tracked file in distinct
+  checkouts without changing the source; ignored caches stay outside cloned
+  content and patches. Real Git and fresh-VM checks cover immutable capture,
+  recovery, cleanup fencing, configuration isolation and retained interruptions.
+  The bundled-service workspace check also passes across fresh VMs, including
+  named worker policy, CLI patch recovery and explicit cleanup.
+- Milestone 5 still needs reviewed patch application/integration, mailbox
+  retention cleanup and independent child lifecycle/recovery. A workspace
+  resource is not an independently resumable child job. The full integration
+  gate remains outstanding.
+- Next implementation: reviewed patch integration and child recovery,
   extending shared Alto contracts where needed. Remote qualification follows
   when a host is available.
 - Recovery now restores queued work and explicitly approved checkpoints; uncertain

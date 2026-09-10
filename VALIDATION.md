@@ -8,7 +8,7 @@ revision is published.
 
 ## Automated checks
 
-- Zekkyou: **53 tests passed**. Includes resident execution, private state,
+- Zekkyou: **56 tests passed**. Includes resident execution, private state,
   named profiles, correlated bounded socket requests, owner cleanup, malformed
   envelopes, disconnect/reconnect, two-client conversation consistency,
   follow-up context, persisted transcript after service restart, approval
@@ -31,7 +31,7 @@ revision is published.
   command scoping, and running-task selection.
   A real ExRatatui headless terminal submits to a real resident service,
   detaches during execution, reconnects, and verifies the rendered answer.
-- Alto: **704 regression tests passed** with `--max-cases 4`, covering the
+- Alto: **723 regression tests passed** with `--max-cases 4`, covering the
   shared queue/ledger recovery changes and application command envelope bounds.
   Checkpoint tests cover exact continuation and prepared-value restoration,
   model/tool batches, budget preservation, unsupported capabilities,
@@ -84,8 +84,8 @@ A third VM confirms completion, acknowledgement and no worker replay, within
 a shared nine-model-request budget with all 18 tokens accounted for.
 
 `python3 -B scripts/release_smoke.py _build/prod/zekkyou-0.0.1-dev.tar.gz`
-passes against the extracted release in a separate directory containing spaces,
-with system Erlang/Elixir/Mix absent from PATH. It runs the execution, checkpoint
+passed at the mailbox baseline (`e9eb3cd`) against the extracted release in a
+separate directory containing spaces, with system Erlang/Elixir/Mix absent from PATH. It runs the execution, checkpoint
 and team smoke scenarios through the bundled CLI, checks exact forwarding of
 task text containing shell syntax and newlines, rejects invalid configuration and
 duplicate service ownership, verifies private state, and confirms that a crash
@@ -103,6 +103,24 @@ SSH tests use a controlled executable that binds a real local Unix socket.
 They check OpenSSH arguments, private directory permissions, owner death,
 startup timeout, cleanup and actual child OS-process termination. These tests
 exercise transport management; they do not constitute remote-host qualification.
+
+Workspace qualification includes concurrent real file-tool edits to the same
+tracked path in separate child clones, with distinct captured patches and an
+unchanged source. Git checks cover clean source admission, source-local filter
+rejection, inherited configuration isolation, ignored build caches, resource
+bounds and tampered metadata/patch detection. Resource checks cover killed
+creation and worker use, continuation-grant interruption, non-evictable retained
+workspaces, stale cleanup and callback-result preservation after ledger failure.
+Two standalone Alto VMs verified exact frozen-patch recovery and fenced cleanup.
+
+`python3 -B scripts/workspace_smoke.py _build/prod/rel/zekkyou/bin/zekkyou-cli`
+passes for this increment against the bundled runtime: named workers make
+independent edits, source content stays unchanged, a fresh service VM returns
+identical patches through CLI inspection, stale discard is rejected, and exact
+revision cleanup succeeds. The full bundled regression rerun was not completed
+for this increment; the broader release result above is the previous baseline.
+The current `release_smoke.py` includes this workspace scenario for future full
+qualification. Live providers and remote hosts remain unqualified.
 
 ## Remaining qualification and limits
 
@@ -126,7 +144,7 @@ exercise transport management; they do not constitute remote-host qualification.
   reject live capabilities or incompatible code/configuration. Independently
   suspended child runs remain unsupported. Waiting for approval pauses active
   execution time; consumed budget counters are preserved.
-- Named teams and durable addressed mailboxes are implemented with shared workspaces.
-  Independent child lifecycle/recovery, isolated coding workspaces, mailbox retention cleanup,
+- Named teams, durable addressed mailboxes and optional isolated workspace capture are implemented.
+  Reviewed patch integration, independent child lifecycle/recovery, mailbox retention cleanup,
   memory/skills, messaging adapters and
   live remote qualification remain pending. No changes were pushed or published.
