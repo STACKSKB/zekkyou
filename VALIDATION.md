@@ -1,10 +1,10 @@
 # Development checkpoint — 2026-09-10
 
-Alto source: public v0.0.1 plus local commits on `zekkyou/durable-host` in
-`/home/three/code/alto`. The normal Alto checkout contains all integration changes, including durable
-admission, revision-fenced cancellation and retries, trusted application commands,
-and registry-owned or caller-owned execution. Set `ALTO_PATH` until the integrated
-revision is published.
+Current Alto source: published Git commit
+`3bcec285537c5ab44d301a43737fc9d0b8351a7a`, pinned in both the service and
+terminal dependency declarations and lockfiles. `ALTO_PATH` is now optional.
+The sections below retain earlier development checkpoints; the latest runner
+migration validation is recorded at the end.
 
 ## Automated checks
 
@@ -300,3 +300,36 @@ Automatic restoration of an interrupted parent batch, independently suspended
 children, coordinated active time and automatic journal/budget retirement are
 still pending. The user requested stopping after this current step; remaining
 roadmap items are deferred.
+
+## Published runner migration — 2026-09-10
+
+The service and terminal resolve the published Alto revision from Git with
+`ALTO_PATH` unset. No Alto source was changed for this migration, and its upstream
+test suite was not rerun here.
+
+- **73 service tests** pass, including **22 focused migration tests**. Coverage
+  includes trusted per-profile runner selection, scheduled Stepped execution and
+  cancellation, inherited child runner options, and custom opaque handles with
+  neutral results through the resident registry.
+- **13 terminal tests** pass. Production compilation with warnings as errors
+  and formatting checks pass for both packages. The service release builds.
+- Workspace checks prove that manager-owned source and patch digest remain
+  authoritative when backend metadata omits or tampers with equivalent fields.
+  Legacy resources remain inspectable/exportable while mutation is refused;
+  tests compare retained records and patch bytes before and after rejection.
+- Legacy approval packets are retained exactly and cannot release an approval
+  or denial grant through the shipped runners. Tests verify the terminal notice,
+  absence of tool execution, and continued availability of explicit cancellation.
+- The complete relocated bundled-release qualification passes. Fresh service
+  VMs recover exact prepared approvals for Serial to Serial, Serial to Stepped,
+  and Stepped to Serial, without repeating earlier effects. Serial and Stepped
+  teams preserve separate child sessions, durable journals, shared usage/budgets
+  and exact integration approval across restart.
+- Existing bundle scenarios also pass: execution/reconnect, durable scheduling,
+  mailboxes, isolated coding workspaces, two reviewed patch integrations across
+  four VMs, durable budget enforcement, startup failures, exclusive state
+  ownership, shutdown cleanup, crash review and private state.
+
+A delegated final review found no must-fix issue. Upgrade compatibility limits
+and reconciliation steps are documented in [the runner guide](docs/runners.md).
+This migration does not implement the deferred roadmap items above.

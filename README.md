@@ -9,24 +9,22 @@ Development is in progress; this is not yet the unattended-operation release.
 
 ## Development
 
-The dependency pins Alto commit `1aa4ed366bbcc248d60aff65b207600a1079f6ed`,
-which adds durable replay, owner-bound runs and delayed queue scheduling on top
-of the clean public v0.0.1 release. That revision is currently **local and
-unpublished** on `zekkyou/durable-host`. Until it is published, set `ALTO_PATH`
-to the integrated checkout; fetching this revision from GitHub will not work.
-Local development uses the `zekkyou/durable-host` branch in the normal Alto
-checkout, `/home/three/code/alto` on this machine. The first three commits were
-made in an independent `.work/alto` checkout and have been imported into that
-branch. Further Alto changes are committed in the normal Alto folder. The
-branch starts at the clean public release; older development branches are kept.
+The dependency and lockfiles pin published Alto commit
+`3bcec285537c5ab44d301a43737fc9d0b8351a7a`. This includes the durable-host
+mechanisms and configurable Serial/Stepped runners. A separate Alto checkout is
+optional; normal builds fetch the published Git revision.
 
 ```sh
-export ALTO_PATH="/path/to/alto" # here: /home/three/code/alto
 mix deps.get
 mix test
 mix escript.build
-python3 scripts/smoke.py
+python3 -B scripts/smoke.py
 ```
+
+For local Alto development, set `ALTO_PATH=/path/to/alto` explicitly. Validate
+against the pinned release before upgrading persisted state. See
+[runner selection and upgrade compatibility](docs/runners.md), particularly
+for suspended approvals and retained worker workspaces.
 
 Alto commits: `0ea2ec0` (durable replay and owner lifetime), `d9604e2` (due times
 and fenced rescheduling), `262bd13` (fresh-VM replay without unsafe term decoding),
@@ -99,7 +97,8 @@ on clients when choosing another state directory.
 
 The `runtime:` configuration field accepts a server-side `Zekkyou.Runtime`
 adapter. The default composes Alto's queue, operation ledger, consumers, registry and socket listener; its execution
-profiles remain ordinary `Alto.Config` values. Native terminal UI libraries are
+profiles remain ordinary `Alto.Config` values and may select `runner:` and
+`runner_options:`. See [runner configuration](docs/runners.md). Native terminal UI libraries are
 not dependencies of this service.
 
 ## Terminal interface
@@ -111,8 +110,6 @@ composer submits durable tasks; queued work appears before execution starts.
 
 ```sh
 cd packages/zekkyou_tui
-export ALTO_PATH="/path/to/alto"
-export ALTO_TUI_LOCAL=1
 mix deps.get
 mix test
 bin/zekkyou-tui --profile coding

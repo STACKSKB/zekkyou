@@ -106,10 +106,11 @@ recovery, integration and review with the lead agent. Hosted CI is out of scope.
   exact bounded results from each worker before parent collection. Ordered joins, generation
   fencing, explicit acknowledgement/retirement and conservative uncertain dispatch
   records are implemented. Zekkyou teams can opt in with a trusted journal server.
-- Zekkyou pins `1aa4ed366bbcc248d60aff65b207600a1079f6ed`. These Alto changes
-  remain local on `zekkyou/durable-host` in `/home/three/code/alto`; use
-  `ALTO_PATH` until that revision is published. The initial independent checkout
-  in `.work/alto` has been superseded by this normal Alto checkout.
+- Zekkyou now pins published Alto `3bcec285537c5ab44d301a43737fc9d0b8351a7a`,
+  including the durable-host additions and independent Serial/Stepped runners.
+  Both service and terminal dependencies/lockfiles work without `ALTO_PATH`;
+  it remains an optional development override. Runtime policies stay in Zekkyou.
+  Earlier `.work/alto` and durable-host checkouts are historical development state.
 - TUI implementation: optional `packages/zekkyou_tui` client reuses Alto's
   layout, selects resident/stored sessions, sends follow-ups, displays saved
   conversation and bounded activity, handles approval/cancel commands, and
@@ -222,5 +223,7 @@ recovery, integration and review with the lead agent. Hosted CI is out of scope.
 - Recovery now restores queued work and explicitly approved checkpoints; uncertain
   dispatched effects remain parked for operator reconciliation. Durable agent
   coordination, memory/skills and messaging adapters remain pending.
-- Development paused at the user's request after completing the child-journal
-  step. Remaining roadmap items are recorded above and have not been started.
+- The child-journal step was completed before pausing broader roadmap work.
+  A subsequent requested migration adopts Alto's published runner refactor,
+  manager-owned workspace source/digest contracts, and explicit old-state upgrade
+  handling. Independent child recovery and later milestones remain deferred.

@@ -184,6 +184,9 @@ defmodule Zekkyou.Console do
 
   defp do_perform(model, decision, _owner) when decision in [:approve, :deny] do
     case selected(model) do
+      %{durable: true, upgrade_required: reason} when is_binary(reason) ->
+        %{model | notice: "Resolve this approval with the previous version before upgrading"}
+
       %{durable: true, status: "waiting_approval", id: id, revision: revision} ->
         task_command(model.client, "decide", %{
           "id" => id,
@@ -312,6 +315,7 @@ defmodule Zekkyou.Console do
           revision: task["revision"],
           evidence: %{},
           approval: nil,
+          upgrade_required: task["upgrade_required"],
           title: clean(task["task"]),
           status: status,
           config: task["profile"],
@@ -333,6 +337,7 @@ defmodule Zekkyou.Console do
           | title: clean(detail["task"]),
             evidence: detail["evidence"],
             approval: detail["approval"],
+            upgrade_required: detail["upgrade_required"],
             usage: detail["evidence"]["usage"] || detail["usage"] || task.usage
         }
 
@@ -495,7 +500,13 @@ defmodule Zekkyou.Console do
             ""
           end
 
-        "#{task.status}\nTask: #{task.id}\nProfile: #{clean(task.config)}\nSession: #{task.session_id}\nRun: #{task.run_id || "not resident"}\nUsage: #{clean(task.usage)}\n#{Map.get(model.live, task.run_id, "")}#{approval}#{review}"
+        upgrade =
+          if Map.get(task, :upgrade_required),
+            do:
+              "\nUpgrade: resolve this approval with the previous version, or cancel after reviewing completed effects.",
+            else: ""
+
+        "#{task.status}\nTask: #{task.id}\nProfile: #{clean(task.config)}\nSession: #{task.session_id}\nRun: #{task.run_id || "not resident"}\nUsage: #{clean(task.usage)}\n#{Map.get(model.live, task.run_id, "")}#{approval}#{review}#{upgrade}"
       else
         "New task\nProfile: #{clean(Keyword.get(model.opts, :profile, "coding"))}"
       end
@@ -516,6 +527,7 @@ defmodule Zekkyou.Console do
 
   defp selected_approvals(model) do
     case selected(model) do
+      %{upgrade_required: reason} when is_binary(reason) -> []
       %{status: "waiting_approval", approval: approval} when is_map(approval) -> [approval]
       _ -> live_approvals(model)
     end

@@ -13,14 +13,26 @@ defmodule ZekkyouTUI.MixProject do
   def application, do: [extra_applications: [:logger]]
 
   defp deps do
-    alto_path =
-      System.get_env("ALTO_PATH") ||
-        Mix.raise("zekkyou_tui requires ALTO_PATH until Alto is published")
+    ref = "3bcec285537c5ab44d301a43737fc9d0b8351a7a"
+    repository = "https://github.com/STACKSKB/alto.git"
+
+    {alto, alto_tui} =
+      case System.get_env("ALTO_PATH") do
+        nil ->
+          {{:alto, git: repository, ref: ref, override: true},
+           {:alto_tui, git: repository, ref: ref, subdir: "packages/alto_tui", override: true}}
+
+        path ->
+          path = Path.expand(path)
+
+          {{:alto, path: path, override: true},
+           {:alto_tui, path: Path.join(path, "packages/alto_tui"), override: true}}
+      end
 
     [
       {:zekkyou, path: "../..", override: true},
-      {:alto, path: Path.expand(alto_path), override: true},
-      {:alto_tui, path: Path.join(Path.expand(alto_path), "packages/alto_tui"), override: true},
+      alto,
+      alto_tui,
       {:ex_ratatui, "~> 0.13.1", override: true}
     ]
   end

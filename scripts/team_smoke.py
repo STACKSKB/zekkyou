@@ -98,7 +98,13 @@ workers = %{"inspect" => [provider: {TeamSmoke.Provider, worker: true},
 {:ok, _journal} = Alto.OperationLog.start_link(
   id: "children", name: TeamSmoke.Journal,
   dir: Path.join(System.fetch_env!("ZEKKYOU_STATE_DIR"), "operations"))
+runner = case System.get_env("ZEKKYOU_SMOKE_RUNNER", "serial") do
+  "serial" -> Alto.Runner.Serial
+  "stepped" -> Alto.Runner.Stepped
+end
 profile = Alto.Config.new(
+  runner: runner,
+  runner_options: [],
   provider: TeamSmoke.Provider,
   system_prompt: Zekkyou.Team.instructions(workers, 2),
   loop: Zekkyou.Team.loop(workers: workers, max_children: 2, max_concurrency: 2, sessions: :separate, journal: TeamSmoke.Journal),
@@ -118,7 +124,7 @@ Zekkyou.Config.new(
 '''
 
 
-def main(mailboxes=False):
+def main(mailboxes=False, runner="serial"):
     with tempfile.TemporaryDirectory(prefix="zekkyou-team-") as temporary:
         base = Path(temporary)
         workspace = base / "workspace"
@@ -129,7 +135,8 @@ def main(mailboxes=False):
         socket_path = str(base / "state/service.sock")
         environment = os.environ.copy()
         environment.update(ZEKKYOU_WORKSPACE=str(workspace), ZEKKYOU_STATE_DIR=str(base / "state"),
-                           ZEKKYOU_TEAM_MAILBOX="1" if mailboxes else "0", ERL_FLAGS="+S 2:2")
+                           ZEKKYOU_TEAM_MAILBOX="1" if mailboxes else "0",
+                           ZEKKYOU_SMOKE_RUNNER=runner, ERL_FLAGS="+S 2:2")
         worker_calls = "1111" if mailboxes else "11"
         waiting_tokens = 12 if mailboxes else 8
         completed_tokens = 18 if mailboxes else 10
@@ -238,7 +245,7 @@ def main(mailboxes=False):
         finally:
             service.stop(process)
 
-    print("PASS: " + ("scoped durable team mailboxes, retained-state compaction, restart, acknowledgement, stable identity" if mailboxes
+    print(f"PASS ({runner}): " + ("scoped durable team mailboxes, retained-state compaction, restart, acknowledgement, stable identity" if mailboxes
                       else "named workers, separate child sessions, durable child journals, shared budget/usage, exact integration approval, fresh-VM recovery"))
 
 

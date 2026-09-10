@@ -53,7 +53,9 @@ These commands are interpreted only for operator-review tasks; ordinary text
 cannot silently restart uncertain work. If another client has already decided,
 refresh the task before acting again.
 
-Task execution uses the same Alto serial runner as interactive runs. Each
+Task execution uses the same trusted Alto runner profile as interactive runs.
+Serial is the default; `runner: Alto.Runner.Stepped` selects its automatic host.
+See [runner selection and upgrade notes](runners.md). Each
 attempt is recorded in the operation ledger before execution and its outcome
 is recorded before the queue claim is acknowledged. Leases and rotating claim
 ids fence stale workers. Queue, ledger, payload, attempt, and outcome bounds
@@ -114,3 +116,9 @@ are re-resolved on the host, while exact messages and prepared tool data remain
 in private state. This is an explicit continuation contract, not arbitrary
 process serialization. Existing Socket approvals retain their live-wait policy.
 Unknown effects after a resumed dispatch still require operator review.
+
+Pre-refactor suspended approval packets are retained but cannot be approved or
+denied by the new shipped runners. The task reports `upgrade_required` and the
+terminal explains the required reconciliation; see [upgrade steps](runners.md).
+Completed transcripts remain usable. Interrupted application commands can report
+`command_outcome_unknown`; inspect durable state before retrying.

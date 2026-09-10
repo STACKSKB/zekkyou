@@ -62,6 +62,10 @@ Team configuration accepts 1–64 named profiles and children, with concurrency
 no greater than the configured child limit. Defaults are four children and two
 concurrent children. The example runs at most two inspection workers at once.
 
+The lead profile selects the Alto runner and trusted `runner_options`; workers
+inherit them. Serial remains default and Stepped automatic mode is supported.
+See [runner configuration and upgrade notes](runners.md).
+
 Alto owns the shared mechanism: effect/model-request counters, active execution
 deadline, child lifetime, result bounds and inherited authority. A rejected
 budget reservation does not consume capacity. Children cannot add tools,

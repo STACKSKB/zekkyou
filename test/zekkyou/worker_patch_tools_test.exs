@@ -87,6 +87,9 @@ defmodule Zekkyou.WorkerPatchToolsTest do
              Zekkyou.Tools.ApplyWorkerPatch.prepare(args, ctx, manager: m)
 
     assert details.workspace_id == ws.id
+    assert details.source == fixture.source
+    assert details.sha256 == prepared["patch_sha256"]
+    assert details.sha256 == ws.workspace["patch_sha256"]
 
     assert {:ok, chunk} =
              Zekkyou.Tools.ReviewWorkerPatch.run(%{"workspace_id" => ws.id}, ctx, manager: m)
@@ -125,5 +128,33 @@ defmodule Zekkyou.WorkerPatchToolsTest do
 
       assert {:error, _} = Zekkyou.Tools.ApplyWorkerPatch.run_prepared(prepared, bad, manager: m)
     end
+  end
+
+  test "backend metadata cannot redirect the source used by scope and approval", fixture do
+    {m, ws, _} = frozen(fixture)
+    {:ok, entry} = Alto.OperationLog.recovery(m.ledger, ws.id)
+    foreign = Path.join(fixture.source, "foreign")
+    packet = put_in(entry.checkpoint, ["workspace", "snapshot", "source"], foreign)
+    {:ok, changed} = Alto.OperationLog.update_checkpoint(m.ledger, ws.id, entry.revision, packet)
+    args = %{"workspace_id" => ws.id, "revision" => changed.revision}
+
+    assert {:ok, prepared, details} =
+             Zekkyou.Tools.ApplyWorkerPatch.prepare(
+               args,
+               context(fixture.source, %{root_run_id: "team", path: []}),
+               manager: m
+             )
+
+    assert details.source == fixture.source
+    assert details.sha256 == prepared["patch_sha256"]
+
+    assert {:error, :workspace_scope_mismatch} =
+             Zekkyou.Tools.ApplyWorkerPatch.prepare(
+               args,
+               context(foreign, %{root_run_id: "team", path: []}),
+               manager: m
+             )
+
+    assert File.read!(Path.join(fixture.source, "tracked.txt")) == "base\n"
   end
 end

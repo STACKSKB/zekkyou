@@ -35,10 +35,10 @@ defmodule Zekkyou.Tools.ApplyWorkerPatch do
       details = %{
         workspace_id: id,
         revision: revision,
-        source: info.workspace["snapshot"]["source"],
-        sha256: prepared["integration"]["patch_sha256"],
+        source: info.workspace["source"],
+        sha256: prepared["patch_sha256"],
         bytes: byte_size(patch),
-        files: Enum.map(prepared["integration"]["files"], & &1["path"]),
+        files: affected_files(prepared["integration"]),
         preview: Zekkyou.Workspaces.patch_preview(patch)
       }
 
@@ -47,6 +47,13 @@ defmodule Zekkyou.Tools.ApplyWorkerPatch do
   end
 
   def prepare(_, _, _), do: {:error, :invalid_patch_arguments}
+
+  # Backend-specific file lists are optional display data. The manager-level
+  # source, revision and digest remain the authority for approval/application.
+  defp affected_files(%{"files" => files}) when is_list(files),
+    do: for(%{"path" => path} <- files, is_binary(path), do: path)
+
+  defp affected_files(_), do: []
 
   def run_prepared(prepared, context), do: run_prepared(prepared, context, [])
 

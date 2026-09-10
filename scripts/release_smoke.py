@@ -168,7 +168,10 @@ def main(archive):
             checkpoint_smoke.EXECUTABLE = launcher
             smoke.main(verify_escript=False)
             checkpoint_smoke.main()
+            checkpoint_smoke.main(runner="serial", resume_runner="stepped")
+            checkpoint_smoke.main(runner="stepped", resume_runner="serial")
             team_smoke.main()
+            team_smoke.main(runner="stepped")
             team_smoke.main(mailboxes=True)
             workspace_smoke.main()
             patch_integration_smoke.main()

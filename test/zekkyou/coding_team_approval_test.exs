@@ -5,17 +5,24 @@ defmodule Zekkyou.CodingTeamApprovalTest do
   alias Zekkyou.Config
 
   defmodule Backend do
-    def snapshot(source, _),
+    @behaviour Alto.Workspaces.Backend
+
+    def snapshot(_source, _),
       do:
         {:ok,
          %{
-           "source" => Path.expand(source),
            "base_commit" => String.duplicate("a", 40),
            "base_tree" => String.duplicate("b", 40)
          }}
 
     def checkout(_snapshot, path, _), do: File.mkdir_p(path)
-    def diff(_, _, _), do: {:ok, ""}
+    def diff(_, _, _), do: {:ok, "opaque patch"}
+
+    def prepare_apply(_source, _patch, _digest, _opts),
+      do: {:ok, %{"description" => "opaque backend approval"}}
+
+    def verify_apply(_source, _manifest, _patch, _opts), do: :ok
+    def apply(_source, _manifest, _patch, _opts), do: {:ok, %{"applied" => true}}
   end
 
   setup do
@@ -174,5 +181,39 @@ defmodule Zekkyou.CodingTeamApprovalTest do
 
                :ok
              end)
+  end
+
+  test "manager source and digest authorize patches without backend-specific metadata", %{
+    config: c,
+    name: n,
+    source: source
+  } do
+    m = manager(c, n)
+
+    assert {:ok, %Alto.Workspaces.Snapshot{source: ^source, metadata: metadata} = snapshot} =
+             Alto.Workspaces.prepare(m, source)
+
+    refute Map.has_key?(metadata, "source")
+
+    assert {:ok, ready} =
+             Alto.Workspaces.create(m, snapshot, %{root_run_id: "team", path: ["worker"]})
+
+    assert {:ok, frozen} = Alto.Workspaces.freeze(m, ready.id, ready.revision)
+
+    assert {:ok, prepared, details} =
+             Zekkyou.Tools.ApplyWorkerPatch.prepare(
+               %{"workspace_id" => frozen.id, "revision" => frozen.revision},
+               ctx(source, []),
+               manager: m
+             )
+
+    assert details.source == source
+    assert details.sha256 == frozen.workspace["patch_sha256"]
+    assert prepared["patch_sha256"] == details.sha256
+    refute Map.has_key?(prepared["integration"], "patch_sha256")
+    assert details.files == []
+
+    assert {:ok, %{status: "applied"}} =
+             Zekkyou.Tools.ApplyWorkerPatch.run_prepared(prepared, ctx(source, []), manager: m)
   end
 end

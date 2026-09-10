@@ -270,4 +270,45 @@ defmodule Zekkyou.CheckpointTest do
         wait_for(name, id, status, attempts - 1)
     end
   end
+
+  test "old approval packets remain retained and require upgrade reconciliation", %{
+    name: name,
+    config: config,
+    dir: dir
+  } do
+    submit(name, "legacy", "guarded")
+    wait_for(name, "legacy", "waiting_approval")
+    ledger = Service.component(name, :ledger)
+    {:ok, current} = Alto.OperationLog.recovery(ledger, "legacy")
+    legacy = Map.delete(current.checkpoint, "continuation_format")
+    {:ok, saved} = Alto.OperationLog.update_checkpoint(ledger, "legacy", current.revision, legacy)
+    stop_supervised!(Service)
+    start_supervised!({Service, name: name, config: config})
+    {:ok, %{"task" => task}} = Tasks.command(name, "get", %{"id" => "legacy"})
+    assert task["status"] == "waiting_approval"
+    assert task["upgrade_required"] == "pre_refactor_checkpoint"
+
+    for decision <- ["approve", "deny"] do
+      assert {:error, :checkpoint_upgrade_required} =
+               Tasks.command(name, "decide", %{
+                 "id" => "legacy",
+                 "revision" => task["revision"],
+                 "decision" => decision
+               })
+    end
+
+    assert {:ok, ^saved} = Alto.OperationLog.recovery(ledger, "legacy")
+    refute File.exists?(Path.join(dir, "approved"))
+    assert File.read!(Path.join(dir, "prepared")) == "1"
+    model = Console.perform(Console.new(socket: Config.socket_path(config)), :connect, self())
+    model = Console.perform(model, {:select, "legacy"}, self())
+    assert model.detail =~ "previous version"
+    refute model.detail =~ "Ctrl+A approve"
+    denied = Console.perform(model, :approve, self())
+    assert denied.notice =~ "previous version"
+    Console.close(denied)
+    assert {:ok, _} = Tasks.command(name, "cancel", %{"id" => "legacy"})
+    wait_for(name, "legacy", "cancelled")
+    refute File.exists?(Path.join(dir, "approved"))
+  end
 end

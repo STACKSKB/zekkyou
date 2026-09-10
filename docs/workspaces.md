@@ -32,13 +32,14 @@ approval recovery is still pending. The [coding-team profile](../examples/coding
 configures this policy, the same manager and scoped patch tools together.
 
 After a child finishes, its result includes a workspace ID, revision, status,
-source snapshot and frozen patch hash. Capturing the patch leaves the source
+manager-owned source, backend snapshot metadata and frozen patch hash. Capturing the patch leaves the source
 checkout unchanged. The lead can inspect full patches with `review_worker_patch`
 and request `apply_worker_patch` with the saved workspace ID and revision.
 Both tools enforce the host's execution-tree identity and source directory;
 workers cannot apply their own patches or inspect another team's resources.
 
-Alto prepares a portable approval manifest containing the patch hash, repository
+Alto prepares a portable approval manifest binding the top-level patch digest
+and workspace revision, plus backend integration data such as repository
 identity and affected-file snapshots. Approval after a restart uses that exact
 manifest. Changed content, modes, repository HEAD or configuration invalidate
 it. Applying disjoint patches preserves unrelated files and the Git index.
@@ -85,3 +86,16 @@ The deterministic local qualification script is
 `python3 -B scripts/workspace_smoke.py [PATH_TO_ZEKKYOU_CLI]`. It checks named
 workers, an unchanged source, recovered patches and fenced operator cleanup
 across fresh service VMs without a model-provider account.
+
+Workspace creation uses `Alto.Workspaces.Snapshot` to separate the source identity
+from backend metadata. Zekkyou authorizes the retained `workspace["source"]` and
+displays the manager-level `prepared["patch_sha256"]`. Backend metadata cannot
+redirect the source or substitute the approved digest. Custom integration
+backends implement Alto's optional `prepare_apply/4`, `verify_apply/4` and
+`apply/4`; verification and application receive the retained source explicitly.
+Backend file lists are optional display data.
+
+Older resources without the top-level source remain inspectable and exportable,
+but report `upgrade_required: "legacy_workspace_source"`; scoped patch operations
+and discard fail with `workspace_upgrade_required`. No data is deleted or
+silently converted. Follow the [upgrade and reconciliation steps](runners.md).

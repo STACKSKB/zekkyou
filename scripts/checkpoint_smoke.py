@@ -109,8 +109,14 @@ defmodule CheckpointSmoke.GuardedTool do
   end
 end
 
+runner = case System.get_env("ZEKKYOU_SMOKE_RUNNER", "serial") do
+  "serial" -> Alto.Runner.Serial
+  "stepped" -> Alto.Runner.Stepped
+end
 profile = fn steps, approval ->
   Alto.Config.new(
+    runner: runner,
+    runner_options: [],
     provider: nil,
     loop: Alto.rule_loop(steps: steps),
     tools: [CheckpointSmoke.FirstTool, CheckpointSmoke.GuardedTool],
@@ -132,7 +138,7 @@ Zekkyou.Config.new(
     )
 
 
-def main():
+def main(runner="serial", resume_runner=None):
     with tempfile.TemporaryDirectory(prefix="zekkyou-checkpoint-") as temporary:
         base = Path(temporary)
         workspace = base / "workspace"
@@ -147,6 +153,7 @@ def main():
             ZEKKYOU_WORKSPACE=str(workspace),
             ZEKKYOU_STATE_DIR=str(state),
             ERL_FLAGS="+S 2:2",
+            ZEKKYOU_SMOKE_RUNNER=runner,
         )
 
         process = launch(environment, socket_path, config_path)
@@ -166,6 +173,7 @@ def main():
             stop(process)
 
         (workspace / "input").write_text("changed")
+        environment["ZEKKYOU_SMOKE_RUNNER"] = resume_runner or runner
         process = launch(environment, socket_path, config_path)
         try:
             recovered = wait_for(environment, socket_path, "approval", "waiting_approval")
@@ -198,7 +206,7 @@ def main():
         finally:
             stop(process)
 
-    print("PASS: durable approval checkpoint, freed worker, exact prepared value, and fresh-VM recovery")
+    print(f"PASS: durable approval checkpoint, freed worker, exact prepared value, fresh-VM recovery ({runner} -> {resume_runner or runner})")
 
 
 if __name__ == "__main__":

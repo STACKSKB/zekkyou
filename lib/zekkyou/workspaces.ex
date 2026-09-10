@@ -42,7 +42,7 @@ defmodule Zekkyou.Workspaces do
       resources =
         Enum.flat_map(page, fn id ->
           case Workspaces.get(manager, id) do
-            {:ok, info} -> [info]
+            {:ok, info} -> [migration_info(info)]
             _ -> []
           end
         end)
@@ -63,7 +63,9 @@ defmodule Zekkyou.Workspaces do
   end
 
   defp execute(manager, "discard", %{"id" => id, "revision" => revision, "note" => note}) do
-    with {:ok, info} <- Workspaces.discard(manager, id, revision, note),
+    with {:ok, current} <- Workspaces.get(manager, id),
+         :ok <- current_layout(current),
+         {:ok, info} <- Workspaces.discard(manager, id, revision, note),
          do: {:ok, public_info(info)}
   end
 
@@ -106,7 +108,8 @@ defmodule Zekkyou.Workspaces do
          %{"root_run_id" => ^root, "path" => child} when is_list(child) <-
            info.workspace["owner"],
          true <- length(child) > length(path) and Enum.take(child, length(path)) == path,
-         true <- info.workspace["snapshot"]["source"] == Path.expand(cwd) do
+         :ok <- current_layout(info),
+         true <- info.workspace["source"] == Path.expand(cwd) do
       {:ok, manager, info}
     else
       {:error, _} = error -> error
@@ -128,5 +131,21 @@ defmodule Zekkyou.Workspaces do
     }
   end
 
-  defp public_info(info), do: info |> Map.delete(:id) |> Map.put(:workspace_id, info.id)
+  # Legacy records remain readable/exportable. Never infer manager authority
+  # from provider metadata or silently rewrite retained state during an upgrade.
+  defp current_layout(%{workspace: %{"source" => source}}) when is_binary(source), do: :ok
+  defp current_layout(_), do: {:error, :workspace_upgrade_required}
+
+  defp migration_info(info) do
+    case current_layout(info) do
+      :ok ->
+        info
+
+      {:error, :workspace_upgrade_required} ->
+        Map.put(info, :upgrade_required, "legacy_workspace_source")
+    end
+  end
+
+  defp public_info(info),
+    do: info |> migration_info() |> Map.delete(:id) |> Map.put(:workspace_id, info.id)
 end

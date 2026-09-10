@@ -12,10 +12,9 @@ The optional terminal client is packaged separately. It is not included here.
 
 ## Build and qualify
 
-From the Zekkyou checkout, with the integrated Alto revision available locally:
+From the Zekkyou checkout (the lockfiles fetch the published Alto revision):
 
 ```sh
-export ALTO_PATH=/path/to/alto
 MIX_ENV=prod mix deps.get
 MIX_ENV=prod mix compile --warnings-as-errors
 MIX_ENV=prod mix release --overwrite
@@ -98,6 +97,10 @@ Durable queued work and checkpoint-enabled approvals survive restarts. An
 uncertain dispatched effect is parked for explicit reconciliation, never silently
 repeated. Socket approval policies still wait in memory. See
 [`docs/tasks.md`](../docs/tasks.md) for approval and reconciliation commands.
+
+Read the [runner migration notes](../docs/runners.md) before upgrading from the
+old durable-host build: pre-refactor approval packets and retained workspace
+source layouts need explicit reconciliation.
 
 For an upgrade, stop the unit first, keep a private backup of the complete state
 directory and trusted configuration, and extract the new build into a separate

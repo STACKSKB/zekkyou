@@ -220,7 +220,14 @@ defmodule Zekkyou.Tasks do
       )
       when is_binary(id) and is_integer(revision) and decision in ["approve", "deny"] do
     reply =
-      with {:ok, recovered} <-
+      with {:ok, current} <- OperationLog.recovery(state.ledger, id),
+           :ok <-
+             checkpoint_upgrade_check(
+               current.checkpoint,
+               state.config,
+               get_in(current.recovery, [:payload, "profile"])
+             ),
+           {:ok, recovered} <-
              OperationLog.resume_checkpoint(state.ledger, id, revision, %{"decision" => decision}),
            admission when admission in [:ok, {:error, :queue_full}] <-
              restore_if_retry(state, id, :retry_permitted, recovered) do
@@ -453,6 +460,13 @@ defmodule Zekkyou.Tasks do
         "not_before_ms" => payload["not_before_ms"],
         "run_id" => (active && active.run_id) || (evidence[:run_id] || evidence["run_id"]),
         "approval" => if(status == "waiting_approval", do: checkpoint["request"], else: nil),
+        "upgrade_required" =>
+          if(
+            status == "waiting_approval" and
+              legacy_checkpoint?(checkpoint, state.config, payload["profile"]),
+            do: "pre_refactor_checkpoint",
+            else: nil
+          ),
         "agent_identity" =>
           Alto.Protocol.encode_term(
             evidence[:agent_identity] || evidence["agent_identity"] ||
@@ -469,6 +483,36 @@ defmodule Zekkyou.Tasks do
         "evidence" => Alto.Protocol.encode_term(evidence)
       }
     end
+  end
+
+  # Only recognize Alto's previous packet shape. Other runners retain control
+  # over their own continuation format and compatibility checks.
+  defp legacy_checkpoint?(
+         %{"format" => 1, "fingerprint" => fingerprint, "state" => state} = packet
+       )
+       when is_binary(fingerprint) and is_binary(state),
+       do: not Map.has_key?(packet, "continuation_format")
+
+  defp legacy_checkpoint?(_), do: false
+
+  defp legacy_checkpoint?(packet, config, profile) do
+    case Zekkyou.Config.resolve(config, profile) do
+      {:ok, options} ->
+        Keyword.get(options, :runner, Alto.Runner.Serial) in [
+          Alto.Runner.Serial,
+          Alto.Runner.Stepped
+        ] and
+          legacy_checkpoint?(packet)
+
+      _ ->
+        false
+    end
+  end
+
+  defp checkpoint_upgrade_check(packet, config, profile) do
+    if legacy_checkpoint?(packet, config, profile),
+      do: {:error, :checkpoint_upgrade_required},
+      else: :ok
   end
 
   defp task_status({:checkpointed, _, _}, _, _), do: "waiting_approval"

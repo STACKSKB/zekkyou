@@ -161,4 +161,71 @@ defmodule Zekkyou.WorkspacesTest do
     spec = Zekkyou.Team.loop(workers: %{"local" => []}, workspaces: m)
     assert spec.subagents.workspaces == m
   end
+
+  test "legacy workspaces stay inspectable and exportable without granting mutation", %{
+    config: c,
+    name: n,
+    source: source
+  } do
+    m = manager(c, n)
+    id = "ws-" <> String.duplicate("a", 64)
+    root = Path.join(m.root, id)
+    File.mkdir_p!(Path.join(root, "checkout"))
+    patch_path = Path.join(root, "patch.diff")
+    patch = "retained legacy patch\n"
+    File.write!(patch_path, patch)
+    File.chmod!(patch_path, 0o600)
+
+    workspace = %{
+      "id" => id,
+      "owner" => %{"root_run_id" => "legacy", "path" => ["worker"]},
+      "cwd" => Path.join(root, "checkout"),
+      "snapshot" => %{"source" => source},
+      "backend_fingerprint" => "previous-release",
+      "patch_path" => patch_path,
+      "patch_sha256" => Base.encode16(:crypto.hash(:sha256, patch), case: :lower),
+      "patch_bytes" => byte_size(patch)
+    }
+
+    :ok = Alto.OperationLog.record_intent(m.ledger, id, "workspace", nil, workspace)
+    :ok = Alto.OperationLog.record_attempt(m.ledger, id, "legacy-freeze")
+
+    :ok =
+      Alto.OperationLog.record_checkpoint(m.ledger, id, "legacy-freeze", %{
+        "version" => 1,
+        "phase" => "frozen",
+        "workspace" => workspace
+      })
+
+    {:ok, before} = Alto.OperationLog.recovery(m.ledger, id)
+    commands = Workspaces.commands(c, n)
+
+    assert {:ok, %{upgrade_required: "legacy_workspace_source"}} =
+             commands["workspaces.get"].(%{"id" => id})
+
+    assert {:ok, %{workspaces: [%{upgrade_required: "legacy_workspace_source"}]}} =
+             commands["workspaces.list"].(%{})
+
+    assert {:ok, chunk} = commands["workspaces.patch"].(%{"id" => id})
+    assert Base.decode64!(chunk.chunk) == patch
+
+    assert {:error, :workspace_upgrade_required} =
+             commands["workspaces.discard"].(%{
+               "id" => id,
+               "revision" => before.revision,
+               "note" => "old format"
+             })
+
+    context = %Alto.Tool.Context{
+      session_id: "legacy-review",
+      cwd: source,
+      agent_identity: %{root_run_id: "legacy", path: []}
+    }
+
+    assert {:error, :workspace_upgrade_required} =
+             Workspaces.for_descendant(context, id, manager: m)
+
+    assert {:ok, ^before} = Alto.OperationLog.recovery(m.ledger, id)
+    assert File.read!(patch_path) == patch
+  end
 end
