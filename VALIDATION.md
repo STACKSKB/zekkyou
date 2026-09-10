@@ -122,6 +122,32 @@ for this increment; the broader release result above is the previous baseline.
 The current `release_smoke.py` includes this workspace scenario for future full
 qualification. Live providers and remote hosts remain unqualified.
 
+## Reviewed patch integration increment
+
+Alto `e40a99b` passes 733 tests, format checks and production compilation.
+Its prepared-patch tests cover read-only preparation, unchanged staging,
+disjoint integration, stale content/mode/HEAD/config rejection, renamed paths,
+additions/deletions/binary patches, special filenames, artifact tampering,
+revision fencing and retained interruption metadata. Three separate Alto VMs
+verify portable preparation, application after restart, recovered application,
+replay rejection and explicit cleanup.
+
+Zekkyou passes 63 tests, including scoped patch review/application, opt-in worker
+file-write policy, and two named coding workers integrated through repeated
+approvals with service restarts. `scripts/patch_integration_smoke.py` passes
+against the current CLI across four fresh service VMs: pending approvals recover
+exactly, each worker runs once, the Git index remains unchanged, and applied
+resources can be inspected and discarded after another restart. The strengthened
+service test also exercises model-driven worker file calls and inherited exposure.
+
+All 13 terminal tests pass. The full relocated bundled-release regression passes
+with no system Erlang/Elixir/Mix on PATH, including scheduling, approvals,
+teams, mailboxes, workspace capture, the new four-VM patch scenario, crash review
+and shutdown cleanup. Its restricted utility list now includes `sync` for durable
+patch storage and `kill` for process-group cleanup. Format checks, warning-free
+production compilation and the bundled build pass. Live providers and remote
+hosts remain unqualified.
+
 ## Remaining qualification and limits
 
 - No live model provider, remote SSH daemon, or Discord integration was tested.
@@ -145,6 +171,6 @@ qualification. Live providers and remote hosts remain unqualified.
   suspended child runs remain unsupported. Waiting for approval pauses active
   execution time; consumed budget counters are preserved.
 - Named teams, durable addressed mailboxes and optional isolated workspace capture are implemented.
-  Reviewed patch integration, independent child lifecycle/recovery, mailbox retention cleanup,
+  Independent child lifecycle/recovery, mailbox retention cleanup,
   memory/skills, messaging adapters and
   live remote qualification remain pending. No changes were pushed or published.

@@ -94,8 +94,10 @@ recovery, integration and review with the lead agent. Hosted CI is out of scope.
   and bounded per-request context; `759192b` adds exact matching queue claims,
   claimed-record wire bounds and checkpointed execution-tree identities;
   `4ab811a` adds durable isolated Git workspaces, worker assignment, immutable
-  patch capture and revision-fenced resource cleanup.
-- Zekkyou pins `4ab811ab58ed86ea4f141b0d41f33e27de476075`. These Alto changes
+  patch capture and revision-fenced resource cleanup; `e40a99b` adds prepared
+  patch application with affected-file snapshots, durable application records,
+  and conservative interruption handling.
+- Zekkyou pins `e40a99b9e49a6cb516d5faee2d73c55898819da0`. These Alto changes
   remain local on `zekkyou/durable-host` in `/home/three/code/alto`; use
   `ALTO_PATH` until that revision is published. The initial independent checkout
   in `.work/alto` has been superseded by this normal Alto checkout.
@@ -108,7 +110,7 @@ recovery, integration and review with the lead agent. Hosted CI is out of scope.
   Reconnection reopens the tunnel without restarting work.
 - Alto now supplies resident summaries and bounded saved transcript snapshots;
   Zekkyou retains application presentation and transport policy.
-- Validation: 56 service/client/transport tests and 13 terminal tests, including
+- Validation: 63 service/client/transport tests and 13 terminal tests, including
   a real native headless terminal driving a resident task across detach/reconnect.
   Two clients recover identical conversations and follow-up messages; saved
   conversation survives service restart. The standalone service smoke check
@@ -178,11 +180,17 @@ recovery, integration and review with the lead agent. Hosted CI is out of scope.
   recovery, cleanup fencing, configuration isolation and retained interruptions.
   The bundled-service workspace check also passes across fresh VMs, including
   named worker policy, CLI patch recovery and explicit cleanup.
-- Milestone 5 still needs reviewed patch application/integration, mailbox
-  retention cleanup and independent child lifecycle/recovery. A workspace
-  resource is not an independently resumable child job. The full integration
+- Reviewed patch integration is implemented: scoped review/application tools
+  use Alto's prepared manifests, and an opt-in coding-team policy allows bounded
+  edits only in actively owned worker checkouts. Lead effects use durable
+  approval. Two workers integrate disjoint patches through separate approvals
+  and service restarts without replay or Git index changes. Four fresh service
+  VMs also verify exact pending decisions, retained applied resources and cleanup.
+  The full bundled release regression passes with this scenario included.
+- Milestone 5 still needs mailbox retention cleanup and independent child
+  lifecycle/recovery. A workspace resource is not an independently resumable child job. The full integration
   gate remains outstanding.
-- Next implementation: reviewed patch integration and child recovery,
+- Next implementation: independent child lifecycle/recovery and mailbox retention cleanup,
   extending shared Alto contracts where needed. Remote qualification follows
   when a host is available.
 - Recovery now restores queued work and explicitly approved checkpoints; uncertain

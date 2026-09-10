@@ -4,7 +4,8 @@ The service release bundles Erlang, Elixir, Alto and Zekkyou. The target does
 not need Mix, a source checkout, or a system Elixir installation. Build for the
 target's architecture, Linux distribution and shared libraries; the archive is
 not a portable binary for every Linux host. The target still needs a POSIX shell,
-standard core utilities, `flock` (util-linux), and the runtime's shared libraries
+standard core utilities (including `sync` and `kill`), `flock` (util-linux),
+Git for coding workspaces, and the runtime's shared libraries
 (including OpenSSL). Configured tools may have further requirements.
 
 The optional terminal client is packaged separately. It is not included here.

@@ -20,6 +20,7 @@ import checkpoint_smoke
 import smoke
 import team_smoke
 import workspace_smoke
+import patch_integration_smoke
 
 
 def check_private(state):
@@ -143,7 +144,7 @@ def main(archive):
         utilities = base / "utilities"
         utilities.mkdir()
         for name in ["sh", "dirname", "basename", "readlink", "cut", "sed", "cat",
-                     "grep", "flock", "git", "env"]:
+                     "grep", "flock", "git", "env", "sync", "kill"]:
             target = shutil.which(name)
             assert target, f"Missing system utility: {name}"
             (utilities / name).symlink_to(target)
@@ -169,6 +170,7 @@ def main(archive):
             team_smoke.main()
             team_smoke.main(mailboxes=True)
             workspace_smoke.main()
+            patch_integration_smoke.main()
             interrupted_run(base)
         finally:
             os.chdir(previous_cwd)

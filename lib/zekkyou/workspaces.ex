@@ -59,8 +59,18 @@ defmodule Zekkyou.Workspaces do
   end
 
   defp execute(manager, "patch", %{"id" => id} = args) do
-    cursor = Map.get(args, "cursor", 0)
+    patch_chunk(manager, id, Map.get(args, "cursor", 0))
+  end
 
+  defp execute(manager, "discard", %{"id" => id, "revision" => revision, "note" => note}) do
+    with {:ok, info} <- Workspaces.discard(manager, id, revision, note),
+         do: {:ok, public_info(info)}
+  end
+
+  defp execute(_manager, _action, _args), do: {:error, :invalid_workspace_command}
+
+  @doc false
+  def patch_chunk(manager, id, cursor) do
     with true <- is_integer(cursor) and cursor >= 0,
          {:ok, info} <- Workspaces.get(manager, id),
          {:ok, patch} <- Workspaces.patch(manager, id),
@@ -84,12 +94,39 @@ defmodule Zekkyou.Workspaces do
     end
   end
 
-  defp execute(manager, "discard", %{"id" => id, "revision" => revision, "note" => note}) do
-    with {:ok, info} <- Workspaces.discard(manager, id, revision, note),
-         do: {:ok, public_info(info)}
+  @doc false
+  def for_descendant(
+        %Alto.Tool.Context{agent_identity: %{root_run_id: root, path: path}, cwd: cwd},
+        id,
+        opts
+      )
+      when is_binary(root) and is_list(path) and is_binary(cwd) do
+    with %Workspaces{} = manager <- Keyword.get(opts, :manager),
+         {:ok, info} <- Workspaces.get(manager, id),
+         %{"root_run_id" => ^root, "path" => child} when is_list(child) <-
+           info.workspace["owner"],
+         true <- length(child) > length(path) and Enum.take(child, length(path)) == path,
+         true <- info.workspace["snapshot"]["source"] == Path.expand(cwd) do
+      {:ok, manager, info}
+    else
+      {:error, _} = error -> error
+      _ -> {:error, :workspace_scope_mismatch}
+    end
   end
 
-  defp execute(_manager, _action, _args), do: {:error, :invalid_workspace_command}
+  def for_descendant(_, _, _), do: {:error, :workspace_scope_mismatch}
+
+  @doc false
+  def patch_preview(patch) do
+    preview = binary_part(patch, 0, min(byte_size(patch), 4_096))
+    encoding = if String.valid?(preview), do: "utf8", else: "base64"
+
+    %{
+      encoding: encoding,
+      text: if(encoding == "utf8", do: preview, else: Base.encode64(preview)),
+      truncated: byte_size(preview) < byte_size(patch)
+    }
+  end
 
   defp public_info(info), do: info |> Map.delete(:id) |> Map.put(:workspace_id, info.id)
 end

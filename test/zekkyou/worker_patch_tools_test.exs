@@ -1,0 +1,129 @@
+defmodule Zekkyou.WorkerPatchToolsTest do
+  use ExUnit.Case, async: true
+
+  alias Alto.{Effect, Event, Transition}
+  alias Zekkyou.{Config, Workspaces}
+
+  defmodule ApproveAll do
+    @behaviour Alto.Approval
+    def decide(_, _, _), do: :approve
+  end
+
+  defmodule WriteLoop do
+    @behaviour Alto.Loop
+    def init(%{content: content}, _),
+      do:
+        Transition.continue(%{}, [
+          Effect.invoke_tool(%{
+            name: "write_file",
+            arguments: %{"path" => "tracked.txt", "content" => content}
+          })
+        ])
+
+    def handle_event(%Event{type: :tool_completed}, s, _), do: Transition.stop(s, :done)
+    def handle_event(_, s, _), do: Transition.continue(s)
+  end
+
+  setup do
+    dir =
+      Path.join(System.tmp_dir!(), "zekkyou-worker-patch-#{System.unique_integer([:positive])}")
+
+    source = Path.join(dir, "source")
+    File.mkdir_p!(source)
+    File.write!(Path.join(source, "tracked.txt"), "base\n")
+    git!(source, ["init", "-q"])
+    git!(source, ["config", "user.email", "test@example.test"])
+    git!(source, ["config", "user.name", "Worker Patch Test"])
+    git!(source, ["add", "tracked.txt"])
+    git!(source, ["commit", "-qm", "base"])
+    name = make_ref()
+
+    config =
+      Config.new(
+        workspace: source,
+        state_dir: Path.join(dir, "state"),
+        profiles: %{"local" => Alto.Config.new(loop: Alto.loop(WriteLoop))},
+        workspaces: [max_retained: 16, max_log_bytes: 100_000]
+      )
+
+    start_supervised!(Workspaces.child(config, name))
+    on_exit(fn -> File.rm_rf!(dir) end)
+    %{source: source, config: config, name: name}
+  end
+
+  defp git!(cwd, args), do: elem(System.cmd("git", args, cd: cwd, stderr_to_stdout: true), 0)
+  defp manager(c, n), do: Workspaces.manager(c.state_dir, n)
+
+  defp context(source, identity),
+    do: %Alto.Tool.Context{cwd: source, agent_identity: identity, session_id: "review"}
+
+  defp frozen(%{source: source, config: c, name: n}) do
+    m = manager(c, n)
+    {:ok, snapshot} = Alto.Workspaces.prepare(m, source)
+    identity = %{root_run_id: "team", path: ["worker"]}
+    {:ok, ready} = Alto.Workspaces.create(m, snapshot, identity)
+
+    {:ok, {:ok, _}, worked} =
+      Alto.Workspaces.use(m, ready.id, ready.revision, fn ws ->
+        Alto.run(%{content: "worker change\n"},
+          loop: Alto.loop(WriteLoop),
+          tools: [Alto.Tools.WriteFile],
+          approval: ApproveAll,
+          cwd: ws["cwd"]
+        )
+      end)
+
+    {:ok, frozen} = Alto.Workspaces.freeze(m, worked.id, worked.revision)
+    {m, frozen, identity}
+  end
+
+  test "reviews and applies a descendant worker patch with required approval", fixture do
+    {m, ws, _identity} = frozen(fixture)
+    ctx = context(fixture.source, %{root_run_id: "team", path: []})
+    args = %{"workspace_id" => ws.id, "revision" => ws.revision}
+    assert Zekkyou.Tools.ApplyWorkerPatch.approval() == :required
+
+    assert {:ok, prepared, details} =
+             Zekkyou.Tools.ApplyWorkerPatch.prepare(args, ctx, manager: m)
+
+    assert details.workspace_id == ws.id
+
+    assert {:ok, chunk} =
+             Zekkyou.Tools.ReviewWorkerPatch.run(%{"workspace_id" => ws.id}, ctx, manager: m)
+
+    assert Base.decode64!(chunk.chunk) =~ "worker change"
+    assert {:ok, result} = Zekkyou.Tools.ApplyWorkerPatch.run_prepared(prepared, ctx, manager: m)
+    assert result.status == "applied"
+    assert File.read!(Path.join(fixture.source, "tracked.txt")) == "worker change\n"
+  end
+
+  test "prepared patch becomes stale when source changes", fixture do
+    {m, ws, _} = frozen(fixture)
+    ctx = context(fixture.source, %{root_run_id: "team", path: []})
+    args = %{"workspace_id" => ws.id, "revision" => ws.revision}
+    assert {:ok, prepared, _} = Zekkyou.Tools.ApplyWorkerPatch.prepare(args, ctx, manager: m)
+    File.write!(Path.join(fixture.source, "tracked.txt"), "operator edit\n")
+
+    assert {:error, :stale_patch_target} =
+             Zekkyou.Tools.ApplyWorkerPatch.run_prepared(prepared, ctx, manager: m)
+  end
+
+  test "scope, cwd, and foreign prepared packets are denied", fixture do
+    {m, ws, _} = frozen(fixture)
+    args = %{"workspace_id" => ws.id, "revision" => ws.revision}
+    good = context(fixture.source, %{root_run_id: "team", path: []})
+    assert {:ok, prepared, _} = Zekkyou.Tools.ApplyWorkerPatch.prepare(args, good, manager: m)
+
+    for bad <- [
+          context(fixture.source, %{root_run_id: "other", path: []}),
+          context(fixture.source, %{root_run_id: "team", path: ["worker"]}),
+          context(fixture.source, %{root_run_id: "team", path: ["peer"]}),
+          context(Path.join(fixture.source, "other"), %{root_run_id: "team", path: []})
+        ] do
+      assert {:error, _} =
+               Zekkyou.Tools.ReviewWorkerPatch.run(%{"workspace_id" => ws.id}, bad, manager: m)
+
+      assert {:error, _} = Zekkyou.Tools.ApplyWorkerPatch.run_prepared(prepared, bad, manager: m)
+    end
+  end
+end

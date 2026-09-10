@@ -76,7 +76,14 @@ def main():
         process = service.launch(environment, socket, config)
         try:
             service.command(environment, socket, "schedule", "coding", "make isolated edits", "--id", "coding")
-            completed = service.wait_for(environment, socket, "coding", "completed")
+            try:
+                completed = service.wait_for(environment, socket, "coding", "completed")
+            except AssertionError:
+                current = service.task(environment, socket, "coding")
+                print(service.command(environment, socket, "workspaces"), flush=True)
+                if current.get("session_id"):
+                    print(service.command(environment, socket, "history", current["session_id"]), flush=True)
+                raise
             assert completed["usage"]["total_tokens"] == 4, completed
             records = service.command(environment, socket, "workspaces")[-1]["workspaces"]
             assert len(records) == 2 and all(r["status"] == "frozen" for r in records), records
