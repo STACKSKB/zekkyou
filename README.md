@@ -9,7 +9,7 @@ Development is in progress; this is not yet the unattended-operation release.
 
 ## Development
 
-The dependency pins Alto commit `8ecceaf3a84831c15616b71016b9f7ac52ed3f95`,
+The dependency pins Alto commit `711aee97db68b5ed50ddae3a55b61c3d16bf92b1`,
 which adds durable replay, owner-bound runs and delayed queue scheduling on top
 of the clean public v0.0.1 release. That revision is currently **local and
 unpublished** on `zekkyou/durable-host`. Until it is published, set `ALTO_PATH`
@@ -30,9 +30,11 @@ python3 scripts/smoke.py
 
 Alto commits: `0ea2ec0` (durable replay and owner lifetime), `d9604e2` (due times
 and fenced rescheduling), `262bd13` (fresh-VM replay without unsafe term decoding),
-`8ecceaf` (resident summaries and bounded saved conversations).
-Scheduling primitives are available in Alto; the
-Zekkyou unattended-task policy is a later milestone.
+`8ecceaf` (resident summaries and bounded saved conversations),
+`711aee9` (fenced cancellation/recovery and trusted application commands).
+Zekkyou now composes those primitives into bounded durable tasks with delayed
+admission, cancellation, and explicit operator recovery. See [task commands](docs/tasks.md).
+Durable tool-approval checkpoints remain under development.
 
 Alto uses `flock` for cross-process state ownership. The server requires no
 native terminal renderer. Provider and external tool requirements depend on
@@ -69,15 +71,15 @@ runtime. Submit it with `./zekkyou start inspect '{"path":"."}'`.
 
 `start` returns the run and session IDs. `watch` displays live notifications;
 `history` pages through persisted session events. Closing a client leaves the
-service running. Restart recovery of interrupted work is a separate roadmap
-milestone: current Alto sessions resume only from completed transcript snapshots.
+service running. The durable `schedule` commands park interrupted attempts for operator review;
+current Alto sessions resume only from completed transcript snapshots.
 
 State defaults to `$XDG_STATE_HOME/zekkyou` or `~/.local/state/zekkyou`.
 Its socket and state are private to the service account. Use `--socket PATH`
 on clients when choosing another state directory.
 
 The `runtime:` configuration field accepts a server-side `Zekkyou.Runtime`
-adapter. The default composes Alto's registry and socket listener; its execution
+adapter. The default composes Alto's queue, operation ledger, consumers, registry and socket listener; its execution
 profiles remain ordinary `Alto.Config` values. Native terminal UI libraries are
 not dependencies of this service.
 

@@ -7,7 +7,17 @@ defmodule Zekkyou.Config do
     :state_dir,
     :profiles,
     max_retained_events: 1_000,
-    runtime: Zekkyou.Runtime.Alto
+    runtime: Zekkyou.Runtime.Alto,
+    scheduling: [
+      workers: 2,
+      max_attempts: 3,
+      poll_ms: 250,
+      run_timeout: 300_000,
+      max_model_requests: 64,
+      max_effects: 1_000,
+      max_pending: 100,
+      max_tasks: 1_000
+    ]
   ]
 
   @type t :: %__MODULE__{
@@ -15,7 +25,8 @@ defmodule Zekkyou.Config do
           state_dir: Path.t(),
           profiles: map(),
           max_retained_events: pos_integer(),
-          runtime: module()
+          runtime: module(),
+          scheduling: keyword()
         }
 
   def new(opts) when is_list(opts) do
@@ -23,7 +34,8 @@ defmodule Zekkyou.Config do
       do: raise(ArgumentError, "service options must be a keyword list")
 
     unknown =
-      Keyword.keys(opts) -- [:workspace, :state_dir, :profiles, :max_retained_events, :runtime]
+      Keyword.keys(opts) --
+        [:workspace, :state_dir, :profiles, :max_retained_events, :runtime, :scheduling]
 
     if unknown != [], do: raise(ArgumentError, "unknown service options: #{inspect(unknown)}")
     workspace = opts |> Keyword.fetch!(:workspace) |> Path.expand()
@@ -31,6 +43,7 @@ defmodule Zekkyou.Config do
     profiles = Keyword.fetch!(opts, :profiles)
     retention = Keyword.get(opts, :max_retained_events, 1_000)
     runtime = Keyword.get(opts, :runtime, Zekkyou.Runtime.Alto)
+    scheduling = scheduling_options(Keyword.get(opts, :scheduling, []))
 
     unless is_atom(runtime) and Code.ensure_loaded?(runtime) and
              function_exported?(runtime, :children, 2),
@@ -40,9 +53,14 @@ defmodule Zekkyou.Config do
 
     unless is_map(profiles) and map_size(profiles) > 0 and
              Enum.all?(profiles, fn {name, config} ->
-               is_binary(name) and byte_size(name) in 1..100 and match?(%Alto.Config{}, config)
+               is_binary(name) and byte_size(name) in 1..100 and
+                 not String.starts_with?(name, "scheduled/") and match?(%Alto.Config{}, config)
              end),
-           do: raise(ArgumentError, "profiles must map names to Alto.Config values")
+           do:
+             raise(
+               ArgumentError,
+               "profiles must map names to Alto.Config values; scheduled/ is reserved"
+             )
 
     unless is_integer(retention) and retention in 1..100_000,
       do: raise(ArgumentError, "max_retained_events must be between 1 and 100000")
@@ -52,8 +70,45 @@ defmodule Zekkyou.Config do
       state_dir: state_dir,
       profiles: profiles,
       max_retained_events: retention,
-      runtime: runtime
+      runtime: runtime,
+      scheduling: scheduling
     }
+  end
+
+  defp scheduling_options(options) do
+    defaults = [
+      workers: 2,
+      max_attempts: 3,
+      poll_ms: 250,
+      run_timeout: 300_000,
+      max_model_requests: 64,
+      max_effects: 1_000,
+      max_pending: 100,
+      max_tasks: 1_000
+    ]
+
+    bounds = [
+      workers: 1..16,
+      max_attempts: 1..32,
+      poll_ms: 10..60_000,
+      run_timeout: 100..86_400_000,
+      max_model_requests: 1..10_000,
+      max_effects: 1..100_000,
+      max_pending: 1..100,
+      max_tasks: 1..10_000
+    ]
+
+    unless Keyword.keyword?(options) and Keyword.keys(options) -- Keyword.keys(defaults) == [],
+      do: raise(ArgumentError, "invalid scheduling options")
+
+    settings = Keyword.merge(defaults, options)
+
+    Enum.each(bounds, fn {key, range} ->
+      unless is_integer(settings[key]) and settings[key] in range,
+        do: raise(ArgumentError, "invalid scheduling #{key}")
+    end)
+
+    settings
   end
 
   def load(path) do

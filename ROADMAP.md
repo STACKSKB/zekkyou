@@ -84,8 +84,10 @@ recovery, integration and review with the lead agent. Hosted CI is out of scope.
 - Alto mechanisms committed on `zekkyou/durable-host`: `0ea2ec0` adds replay
   and owner-bound run lifetime; `d9604e2` adds due times/fenced rescheduling;
   `262bd13` makes replay independent of atoms loaded in the old VM;
-  `8ecceaf` supplies run summaries and saved conversations for reconnecting clients.
-- Zekkyou pins `8ecceaf3a84831c15616b71016b9f7ac52ed3f95`. These Alto changes
+  `8ecceaf` supplies run summaries and saved conversations for reconnecting clients;
+  `711aee9` adds fenced rejection, per-grant recovery admission, application
+  commands, and authoritative owner-bound results.
+- Zekkyou pins `711aee97db68b5ed50ddae3a55b61c3d16bf92b1`. These Alto changes
   remain local on `zekkyou/durable-host` in `/home/three/code/alto`; use
   `ALTO_PATH` until that revision is published. The initial independent checkout
   in `.work/alto` has been superseded by this normal Alto checkout.
@@ -98,7 +100,7 @@ recovery, integration and review with the lead agent. Hosted CI is out of scope.
   Reconnection reopens the tunnel without restarting work.
 - Alto now supplies resident summaries and bounded saved transcript snapshots;
   Zekkyou retains application presentation and transport policy.
-- Validation: 17 service/client/transport tests and 10 terminal tests, including
+- Validation: 32 service/client/transport tests and 10 terminal tests, including
   a real native headless terminal driving a resident task across detach/reconnect.
   Two clients recover identical conversations and follow-up messages; saved
   conversation survives service restart. The standalone service smoke check
@@ -106,8 +108,19 @@ recovery, integration and review with the lead agent. Hosted CI is out of scope.
 - Milestone 3 implementation is committed; live remote SSH/reconnect
   qualification remains outstanding because no SSH host is configured.
   Native terminal libraries require the on-disk launcher, not an escript.
-- Next implementation: milestone 4, unattended work and conservative recovery,
-  alongside remote qualification when a host is available.
-- Unattended task policy, durable approvals/checkpoints, automatic safe recovery,
-  concurrent agent coordination, memory/skills and messaging adapters remain
-  pending. The existing queue extension is a mechanism, not that application.
+- Milestone 4 is partially implemented: Zekkyou now has a durable scheduled-task
+  policy backed by Alto's bounded queue and operation ledger, including due-time
+  admission, worker limits, run budgets, lease fencing, explicit cancellation,
+  conservative interrupted-run parking, revisioned operator reconciliation, and
+  CLI inspection/submission commands. Scheduling configuration bounds pending
+  tasks, workers, attempts, run time, model requests and effects; Alto also
+  applies bounded payload, evidence and durable-record limits.
+- Milestone 4 remains incomplete. Durable approval checkpoints and a queued-task
+  view in the TUI are still pending, as are final service-packaging and full
+  unattended qualification. Current approvals remain live waits and can park
+  work when their execution boundary is crossed.
+- Next implementation: durable approval/checkpoint contracts and TUI queued-task
+  presentation, alongside remote qualification when a host is available.
+- Automatic safe recovery, concurrent agent coordination, memory/skills and
+  messaging adapters remain pending. The existing queue extension is a
+  mechanism, not that application.

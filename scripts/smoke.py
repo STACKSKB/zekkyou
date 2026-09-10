@@ -92,6 +92,10 @@ def main():
                 for output in result["output"]
                 for entry in output["entries"]
             ), result
+            scheduled = command(environment, socket_path, "schedule", "inspect", '{"path":"."}',
+                                "--id", "durable-inspection", "--delay-ms", "10000")[-1]
+            assert scheduled["status"] == "queued"
+            assert command(environment, socket_path, "task", "durable-inspection")[-1]["task"]["status"] == "queued"
             history = command(environment, socket_path, "history", started["session_id"])[-1]
             assert any(
                 event["event"] == "tool_completed"
@@ -107,10 +111,28 @@ def main():
             assert replay["events"] == history["events"]
             status = command(environment, socket_path, "status")[-1]
             assert any(session["id"] == started["session_id"] for session in status["sessions"])
+            deadline = time.monotonic() + 20
+            while True:
+                task = command(environment, socket_path, "task", "durable-inspection")[-1]["task"]
+                if task["status"] == "completed":
+                    break
+                assert task["status"] in ("queued", "starting", "running"), task
+                assert time.monotonic() < deadline, task
+                time.sleep(0.1)
+            assert task["session_id"]
         finally:
             stop(process)
 
-    print("PASS: real workspace execution, reconnect, fresh-VM replay, no native TUI dependency")
+        process = launch(environment, socket_path)
+        try:
+            stored = command(environment, socket_path, "task", "durable-inspection")[-1]["task"]
+            assert stored["status"] == "completed"
+            assert stored["session_id"] == task["session_id"]
+            assert command(environment, socket_path, "tasks")[-1]["tasks"][0]["id"] == "durable-inspection"
+        finally:
+            stop(process)
+
+    print("PASS: real execution, reconnect, fresh-VM replay, durable scheduling, no native TUI dependency")
 
 
 if __name__ == "__main__":
