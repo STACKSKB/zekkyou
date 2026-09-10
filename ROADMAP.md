@@ -73,4 +73,22 @@ recovery, integration and review with the lead agent. Hosted CI is out of scope.
 ## Progress
 
 - Planning: approved and revised with shared Alto ownership.
-- Implementation: starting milestone 1.
+- Foundation implemented: separate Elixir application, trusted named profiles,
+  replaceable runtime adapter, resident service, private socket/state, CLI,
+  executable packaging, and an optional systemd user-service template.
+- Detached-execution baseline implemented: client closure leaves work running;
+  reconnect, cancellation, completed-session follow-up and paginated durable
+  event history are available through the CLI. History survives a fresh VM.
+  Run/session IDs are the initial task identity; richer agent task state comes
+  with the application scheduling policy.
+- Alto mechanisms committed on `zekkyou/durable-host`: `0ea2ec0` adds replay
+  and owner-bound run lifetime; `d9604e2` adds due times/fenced rescheduling;
+  `262bd13` makes replay independent of atoms loaded in the old VM.
+- Zekkyou pins `262bd132a44e506ca103c09cef840fd3b5716b33`. These Alto changes
+  remain local in `.work/alto`; use `ALTO_PATH` until that revision is published.
+- Validation: 10 Zekkyou tests, 611 Alto tests, warning-free compile/format
+  checks, and standalone real-file execution/reconnect/fresh-VM replay.
+- Next: milestone 3, the reconnecting TUI and live SSH qualification.
+- Unattended task policy, durable approvals/checkpoints, automatic safe recovery,
+  concurrent agent coordination, memory/skills and messaging adapters remain
+  pending. The existing queue extension is a mechanism, not that application.
