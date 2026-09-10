@@ -10,6 +10,7 @@ defmodule Zekkyou.Config do
     runtime: Zekkyou.Runtime.Alto,
     workspaces: [max_retained: 128, max_log_bytes: 64_000_000],
     mailbox: [
+      auto_compact: true,
       max_messages: 1_000,
       max_completed: 10_000,
       lease_ms: 30_000,
@@ -115,6 +116,7 @@ defmodule Zekkyou.Config do
 
   defp mailbox_options(options) do
     defaults = [
+      auto_compact: true,
       max_messages: 1_000,
       max_completed: 10_000,
       lease_ms: 30_000,
@@ -132,6 +134,9 @@ defmodule Zekkyou.Config do
       do: raise(ArgumentError, "invalid mailbox options")
 
     settings = Keyword.merge(defaults, options)
+
+    unless is_boolean(settings[:auto_compact]),
+      do: raise(ArgumentError, "invalid mailbox auto_compact")
 
     Enum.each(bounds, fn {key, range} ->
       unless is_integer(settings[key]) and settings[key] in range,

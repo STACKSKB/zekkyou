@@ -12,6 +12,7 @@ defmodule Zekkyou.Mailbox do
        id: "team-messages",
        dir: Path.join(config.state_dir, "queues"),
        max_records: settings[:max_messages],
+       auto_compact: settings[:auto_compact],
        max_completed: settings[:max_completed],
        max_payload_bytes: 64_000,
        max_log_bytes: settings[:max_log_bytes],
@@ -24,10 +25,13 @@ defmodule Zekkyou.Mailbox do
 
   @doc "Local operator commands; model tools do not receive this cross-address access."
   def commands(name) do
-    Map.new(~w(list get cancel), fn action ->
+    Map.new(~w(list get cancel compact), fn action ->
       {"mailbox." <> action, fn args -> inspect_or_cancel(queue(name), action, args) end}
     end)
   end
+
+  defp inspect_or_cancel(queue, "compact", args) when is_map(args) and map_size(args) == 0,
+    do: Queue.compact(queue)
 
   defp inspect_or_cancel(queue, "list", %{"root" => root} = args) do
     cursor = Map.get(args, "cursor", 0)

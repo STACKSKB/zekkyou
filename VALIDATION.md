@@ -148,6 +148,27 @@ patch storage and `kill` for process-group cleanup. Format checks, warning-free
 production compilation and the bundled build pass. Live providers and remote
 hosts remain unqualified.
 
+## Mailbox retained-state cleanup increment
+
+Alto `e487d8e` passes 740 tests, format checks and production compilation.
+Queue compaction preserves exact live records, active claims and native owner
+metadata, delayed work, recovery identities, ordering, record-ID progression
+and the configured completed-key window. Tests cover automatic bounded-log
+churn, full retained-state refusal without replacement, opt-out behavior,
+corrupt/incomplete snapshot rejection and torn later-append repair. Two separate
+VMs recover equal retained values and successfully use the original live lease.
+
+Zekkyou passes 65 tests including mailbox churn beyond the log-size limit,
+retained unread messages and claims across restart, completed-key deduplication,
+manual compaction and configuration validation. The mailbox team qualification
+now compacts unread worker messages before restart and completed markers before
+a further restart, checking identical messages and no worker replay.
+
+The full relocated bundled-release regression passes with this scenario,
+including scheduling, exact approval recovery, teams, workspace capture,
+reviewed patch integration, crash review and shutdown cleanup. Format checks,
+warning-free production compilation and the bundled build pass.
+
 ## Remaining qualification and limits
 
 - No live model provider, remote SSH daemon, or Discord integration was tested.
@@ -171,6 +192,6 @@ hosts remain unqualified.
   suspended child runs remain unsupported. Waiting for approval pauses active
   execution time; consumed budget counters are preserved.
 - Named teams, durable addressed mailboxes and optional isolated workspace capture are implemented.
-  Independent child lifecycle/recovery, mailbox retention cleanup,
+  Independent child lifecycle/recovery,
   memory/skills, messaging adapters and
   live remote qualification remain pending. No changes were pushed or published.

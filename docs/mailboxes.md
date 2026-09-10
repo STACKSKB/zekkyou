@@ -79,6 +79,7 @@ Use the task's `agent_identity.root_run_id` for operator inspection:
 ./zekkyou mailbox ROOT_RUN_ID --cursor NEXT_CURSOR
 ./zekkyou mailbox-get ROOT_RUN_ID MESSAGE_KEY
 ./zekkyou mailbox-cancel ROOT_RUN_ID MESSAGE_KEY
+./zekkyou mailbox-compact
 ```
 
 These are local operator commands with cross-address visibility within the
@@ -93,6 +94,7 @@ Configure service-wide bounds using `Zekkyou.Config.new(mailbox: [...])`:
 
 | Setting | Default | Range |
 | --- | --- | --- |
+| `auto_compact` | `true` | `true` or `false` |
 | `max_messages` | 1,000 pending and claimed | 1–10,000 |
 | `max_completed` | 10,000 retained identities | 1–100,000 |
 | `lease_ms` | 30,000 milliseconds | 1,000–3,600,000 |
@@ -108,9 +110,19 @@ tool-result limit should account for this mailbox response size.
 Alto owns atomic matching claims, leases, fencing, file synchronization, replay
 and queue bounds. Zekkyou owns message envelopes, addresses, authority checks,
 configuration and operator presentation. Queue state is private and durable;
-capacity/log limits fail explicitly. Completed tasks do not silently discard
-unread messages. Automatic mailbox retention cleanup, independently recoverable
-child executions and isolated coding workspaces remain pending.
+capacity/log limits fail explicitly. Mailboxes enable Alto's automatic log
+compaction: before a write would exceed the log bound, old history is replaced
+with current live records and the configured completed-identity window.
+`mailbox-compact` performs the same cleanup immediately and reports retained
+counts and file sizes. It operates on the shared mailbox store, not one root.
+
+Compaction preserves unread messages and active claims exactly; completed tasks
+do not silently discard unread messages. Acknowledgement and explicit pending
+cancellation remain the only message removal policies. There is no age-based
+expiry. If retained state cannot fit, capacity still fails explicitly. Set
+`auto_compact: false` to retain append-only queue history; explicit compaction
+still replaces that history. Compacted queues use Alto log version 3 and cannot
+be opened by earlier Alto releases. Independent child recovery remains pending.
 
 `python3 -B scripts/team_smoke.py` exercises both ordinary teams and mailbox
 teams across fresh VMs: two children send findings, the lead suspends for

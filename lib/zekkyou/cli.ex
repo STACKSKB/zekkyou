@@ -21,6 +21,7 @@ defmodule Zekkyou.CLI do
   zekkyou task-cancel ID [--socket PATH]
   zekkyou task-reconcile ID committed|failed|retry --revision N --note TEXT [--socket PATH]
   zekkyou task-decide ID approve|deny --revision N [--socket PATH]
+  zekkyou mailbox-compact [--socket PATH]
   zekkyou mailbox ROOT_RUN_ID [--cursor N] [--socket PATH]
   zekkyou mailbox-get ROOT_RUN_ID MESSAGE_KEY [--socket PATH]
   zekkyou mailbox-cancel ROOT_RUN_ID MESSAGE_KEY [--socket PATH]
@@ -167,6 +168,9 @@ defmodule Zekkyou.CLI do
     do:
       {:ok,
        command_wire("mailbox.list", %{"root" => root, "cursor" => Keyword.get(opts, :cursor, 0)})}
+
+  defp command(["mailbox-compact"], _opts),
+    do: {:ok, command_wire("mailbox.compact", %{})}
 
   defp command(["mailbox-get", root, key], _opts),
     do: {:ok, command_wire("mailbox.get", %{"root" => root, "key" => key})}

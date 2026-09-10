@@ -151,6 +151,9 @@ def main(mailboxes=False):
                     inspected = service.command(environment, socket_path, "mailbox-get", root,
                                                 message["key"])[-1]["message"]
                     assert inspected["payload"]["body"] == "inspected"
+                compacted = service.command(environment, socket_path, "mailbox-compact")[-1]
+                assert compacted["live_records"] == 2, compacted
+                assert mailbox_records()[0]["type"] == "retained_state"
             assert not (workspace / "integrated").exists()
         finally:
             service.stop(process)
@@ -161,6 +164,8 @@ def main(mailboxes=False):
             recovered = service.task(environment, socket_path, "team")
             assert recovered["revision"] == waiting["revision"], recovered
             assert recovered["approval"] == waiting["approval"], recovered
+            if mailboxes:
+                assert service.command(environment, socket_path, "mailbox", root)[-1]["messages"] == pending
             service.command(environment, socket_path, "task-decide", "team", "approve",
                             "--revision", str(recovered["revision"]))
             completed = service.wait_for(environment, socket_path, "team", "completed")
@@ -173,6 +178,8 @@ def main(mailboxes=False):
                 assert completed["run_id"] != waiting["agent_identity"]["root_run_id"]
                 assert sum(r["type"] == "blank" for r in mailbox_records()) == 2
                 assert service.command(environment, socket_path, "mailbox", root)[-1]["messages"] == []
+                compacted = service.command(environment, socket_path, "mailbox-compact")[-1]
+                assert compacted["live_records"] == 0 and compacted["completed_keys"] == 2, compacted
         finally:
             service.stop(process)
 
@@ -185,11 +192,12 @@ def main(mailboxes=False):
             assert (workspace / "integrated").read_text() == "original"
             if mailboxes:
                 assert replay["agent_identity"] == waiting["agent_identity"]
-                assert sum(r["type"] == "blank" for r in mailbox_records()) == 2
+                assert len(mailbox_records()[0]["completed"]) == 2
+                assert service.command(environment, socket_path, "mailbox", root)[-1]["messages"] == []
         finally:
             service.stop(process)
 
-    print("PASS: " + ("scoped durable team mailboxes, restart, acknowledgement, stable identity" if mailboxes
+    print("PASS: " + ("scoped durable team mailboxes, retained-state compaction, restart, acknowledgement, stable identity" if mailboxes
                       else "named workers, shared budget/usage, exact integration approval, fresh-VM recovery"))
 
 

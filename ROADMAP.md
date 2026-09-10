@@ -96,8 +96,9 @@ recovery, integration and review with the lead agent. Hosted CI is out of scope.
   `4ab811a` adds durable isolated Git workspaces, worker assignment, immutable
   patch capture and revision-fenced resource cleanup; `e40a99b` adds prepared
   patch application with affected-file snapshots, durable application records,
-  and conservative interruption handling.
-- Zekkyou pins `e40a99b9e49a6cb516d5faee2d73c55898819da0`. These Alto changes
+  and conservative interruption handling; `e487d8e` adds opt-in queue compaction
+  preserving retained records, active claims and completed delivery identities.
+- Zekkyou pins `e487d8e92abe265741c48bc11a77d9df8ec30b53`. These Alto changes
   remain local on `zekkyou/durable-host` in `/home/three/code/alto`; use
   `ALTO_PATH` until that revision is published. The initial independent checkout
   in `.work/alto` has been superseded by this normal Alto checkout.
@@ -110,7 +111,7 @@ recovery, integration and review with the lead agent. Hosted CI is out of scope.
   Reconnection reopens the tunnel without restarting work.
 - Alto now supplies resident summaries and bounded saved transcript snapshots;
   Zekkyou retains application presentation and transport policy.
-- Validation: 63 service/client/transport tests and 13 terminal tests, including
+- Validation: 65 service/client/transport tests and 13 terminal tests, including
   a real native headless terminal driving a resident task across detach/reconnect.
   Two clients recover identical conversations and follow-up messages; saved
   conversation survives service restart. The standalone service smoke check
@@ -187,11 +188,16 @@ recovery, integration and review with the lead agent. Hosted CI is out of scope.
   and service restarts without replay or Git index changes. Four fresh service
   VMs also verify exact pending decisions, retained applied resources and cleanup.
   The full bundled release regression passes with this scenario included.
-- Milestone 5 still needs mailbox retention cleanup and independent child
-  lifecycle/recovery. A workspace resource is not an independently resumable child job. The full integration
+- Mailbox log retention cleanup is implemented through Alto queue compaction.
+  Zekkyou enables automatic compaction before the log fills and supplies a local
+  operator command. Active claims, unread messages and the configured completed
+  deduplication window survive cleanup and restart; unread messages still require
+  acknowledgement or explicit cancellation. No age-based message expiry is implied.
+- Milestone 5 still needs independent child lifecycle/recovery. A workspace resource is not an independently resumable child job. The full integration
   gate remains outstanding.
-- Next implementation: independent child lifecycle/recovery and mailbox retention cleanup,
-  extending shared Alto contracts where needed. Remote qualification follows
+- Next implementation: independent child lifecycle/recovery,
+  including durable shared budgets, separate child sessions and recoverable
+  parent joins in Alto. Remote qualification follows
   when a host is available.
 - Recovery now restores queued work and explicitly approved checkpoints; uncertain
   dispatched effects remain parked for operator reconciliation. Durable agent
