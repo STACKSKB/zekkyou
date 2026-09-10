@@ -20,6 +20,8 @@ defmodule Zekkyou.Console do
             notice: "",
             approvals: %{},
             history: [],
+            history_session_id: nil,
+            tasks_trimmed: false,
             cursor: 0,
             transcript: [],
             history_gap: false,
@@ -96,18 +98,26 @@ defmodule Zekkyou.Console do
       String.trim(text) == "" ->
         %{model | notice: "Enter a message first"}
 
-      byte_size(text) > 65_536 ->
-        %{model | notice: "Message exceeds 64 KiB"}
+      byte_size(text) > 32_000 ->
+        %{model | notice: "Message exceeds 32000 bytes"}
 
-      task && task.status in ["running", "waiting"] ->
+      task && task.status in ["running", "waiting", "queued", "starting", "awaiting_admission"] ->
         %{model | notice: "This task is still running; start a new task for independent work"}
+
+      task && task.status == "requires_operator" ->
+        %{model | notice: "Resolve the uncertain outcome before continuing this task"}
 
       true ->
         profile = (task && task.config) || Keyword.get(model.opts, :profile, "coding")
-        command = %{type: "start_run", config: profile, task: text}
-        command = if task, do: Map.put(command, :resume, task.session_id), else: command
-        reply = request(model.client, command)
-        model = reset_history(%{model | selected_id: reply["session_id"], notice: "Sent"})
+        payload = %{"profile" => profile, "task" => text}
+
+        payload =
+          if task && task.session_id,
+            do: Map.put(payload, "resume", task.session_id),
+            else: payload
+
+        reply = task_command(model.client, "submit", payload)
+        model = reset_history(%{model | selected_id: reply["task_id"], notice: "Sent"})
         # A successful submission stays successful even if the subsequent refresh fails.
         try do
           refresh(model)
@@ -123,12 +133,34 @@ defmodule Zekkyou.Console do
 
   defp do_perform(model, :cancel, _owner) do
     case selected(model) do
+      %{durable: true, id: id, status: status}
+      when status in ["running", "waiting", "queued", "starting", "awaiting_admission"] ->
+        task_command(model.client, "cancel", %{"id" => id})
+        refresh(%{model | notice: "Cancellation requested"})
+
       %{run_id: run, status: status} when not is_nil(run) and status in ["running", "waiting"] ->
         request(model.client, %{type: "cancel", run_id: run, reason: "user"})
         %{model | notice: "Cancellation requested"}
 
       _ ->
         %{model | notice: "No running task selected"}
+    end
+  end
+
+  defp do_perform(model, {:reconcile, resolution, note}, _owner) do
+    case selected(model) do
+      %{durable: true, id: id, revision: revision, status: "requires_operator"} ->
+        task_command(model.client, "reconcile", %{
+          "id" => id,
+          "revision" => revision,
+          "resolution" => resolution,
+          "note" => note
+        })
+
+        refresh(%{model | notice: "Decision recorded"})
+
+      _ ->
+        %{model | notice: "Select a task requiring operator review"}
     end
   end
 
@@ -169,8 +201,11 @@ defmodule Zekkyou.Console do
     model = drain(model, 200)
     runs = request(model.client, %{type: "runs"})["runs"]
     sessions = request(model.client, %{type: "sessions"})["sessions"]
-    tasks = merge_tasks(sessions, runs, model.opts)
-    %{model | tasks: tasks} |> drain(200) |> load_history()
+    queued = task_command(model.client, "list", %{})
+    tasks = merge_tasks(sessions, runs, model.opts) |> merge_scheduled(queued["tasks"], runs)
+    model = %{model | tasks: tasks, tasks_trimmed: queued["truncated"]} |> drain(200)
+    model = load_task_detail(model)
+    load_history(model)
   end
 
   defp merge_tasks(sessions, runs, opts) do
@@ -217,14 +252,86 @@ defmodule Zekkyou.Console do
     |> Enum.sort_by(&{&1.started_at_ms, &1.id}, :desc)
   end
 
+  defp merge_scheduled(stored, scheduled, runs) do
+    sessions = MapSet.new(Enum.map(scheduled, & &1["session_id"]))
+
+    direct =
+      Enum.reject(
+        stored,
+        &(MapSet.member?(sessions, &1.session_id) or String.starts_with?(&1.config, "scheduled/"))
+      )
+
+    tasks =
+      Enum.map(scheduled, fn task ->
+        run = Enum.find(runs, &(&1["id"] == task["run_id"]))
+
+        status =
+          if run && run["pending_approvals"] > 0 && task["status"] == "running",
+            do: "waiting",
+            else: task["status"]
+
+        %{
+          id: task["id"],
+          session_id: task["session_id"],
+          run_id: task["run_id"],
+          durable: true,
+          revision: task["revision"],
+          evidence: %{},
+          title: clean(task["task"]),
+          status: status,
+          config: task["profile"],
+          usage: (run && run["usage"]) || %{},
+          started_at_ms: task["created_at_ms"] || 0
+        }
+      end)
+
+    Enum.sort_by(tasks ++ direct, &{&1.started_at_ms, &1.id}, :desc)
+  end
+
+  defp load_task_detail(model) do
+    case selected(model) do
+      %{durable: true, id: id} = task ->
+        detail = task_command(model.client, "get", %{"id" => id})["task"]
+
+        updated = %{
+          task
+          | title: clean(detail["task"]),
+            evidence: detail["evidence"],
+            usage: detail["evidence"]["usage"] || task.usage
+        }
+
+        %{
+          model
+          | tasks: Enum.map(model.tasks, fn item -> if item.id == id, do: updated, else: item end)
+        }
+
+      _ ->
+        model
+    end
+  end
+
   defp load_history(%{selected_id: nil} = model), do: model
   defp load_history(%{client: nil} = model), do: model
 
   defp load_history(model) do
+    session =
+      case selected(model) do
+        nil -> nil
+        task -> task.session_id
+      end
+
+    model = if model.history_session_id == session, do: model, else: reset_history(model)
+
+    if is_nil(session),
+      do: model,
+      else: read_history(%{model | history_session_id: session}, session)
+  end
+
+  defp read_history(model, session) do
     page =
       request(model.client, %{
         type: "session_events",
-        session_id: model.selected_id,
+        session_id: session,
         cursor: model.cursor,
         limit: 100
       })
@@ -240,7 +347,7 @@ defmodule Zekkyou.Console do
         history_trimmed: model.history_trimmed or length(history) > 500
     }
 
-    case Client.request(model.client, %{type: "session_transcript", session_id: model.selected_id}) do
+    case Client.request(model.client, %{type: "session_transcript", session_id: session}) do
       {:ok, snapshot} ->
         %{model | transcript: snapshot["messages"], transcript_trimmed: snapshot["truncated"]}
 
@@ -298,6 +405,7 @@ defmodule Zekkyou.Console do
     do: %{
       model
       | history: [],
+        history_session_id: nil,
         cursor: 0,
         transcript: [],
         entries: [],
@@ -325,6 +433,7 @@ defmodule Zekkyou.Console do
 
     notices =
       []
+      |> flag(model.tasks_trimmed, "Showing the latest 100 scheduled tasks")
       |> flag(model.history_gap, "History has a gap; reconnect to reload")
       |> flag(model.history_more, "Loading older activity…")
       |> flag(model.history_trimmed, "Showing the latest 500 activity records")
@@ -343,7 +452,14 @@ defmodule Zekkyou.Console do
               "\nDecision: #{clean(a["tool"])}\n#{clean(a["arguments"])}\n#{clean(a["details"])}\nCtrl+A approve / Ctrl+D deny\n#{length(rest)} more pending"
           end
 
-        "#{task.status}\nProfile: #{clean(task.config)}\nSession: #{task.session_id}\nRun: #{task.run_id || "not resident"}\nUsage: #{clean(task.usage)}\n#{Map.get(model.live, task.run_id, "")}#{approval}"
+        review =
+          if task.status == "requires_operator" do
+            "\nReview: #{clean(Map.get(task, :evidence))}\nResolve with /retry NOTE, /committed NOTE or /failed NOTE"
+          else
+            ""
+          end
+
+        "#{task.status}\nTask: #{task.id}\nProfile: #{clean(task.config)}\nSession: #{task.session_id}\nRun: #{task.run_id || "not resident"}\nUsage: #{clean(task.usage)}\n#{Map.get(model.live, task.run_id, "")}#{approval}#{review}"
       else
         "New task\nProfile: #{clean(Keyword.get(model.opts, :profile, "coding"))}"
       end
@@ -374,6 +490,9 @@ defmodule Zekkyou.Console do
     |> Enum.filter(&(&1["run_id"] == run))
     |> Enum.sort_by(& &1["id"])
   end
+
+  defp task_command(client, name, payload),
+    do: request(client, %{type: "command", name: "tasks." <> name, payload: payload})
 
   defp request(client, command) do
     case Client.request(client, command) do

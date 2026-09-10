@@ -33,11 +33,20 @@ Zekkyou.Config.new(
 )
 ```
 
-`zekkyou start PROFILE TASK` and the TUI start an execution directly and are
-intended for interactive work: they return a run/session identity for live
-watching and follow-up. `zekkyou schedule PROFILE TASK` submits an application
-task to the durable queue, where resident workers execute it after its due time
-and expose task state through `tasks`, `task`, and `task-reconcile`.
+`zekkyou start PROFILE TASK` starts an execution directly and returns a
+run/session identity for live watching and follow-up. `zekkyou schedule PROFILE
+TASK` and the TUI composer submit application tasks to the durable queue, where
+resident workers execute them after their due time. The terminal shows queued
+work before a run exists, retains task identity across restart, and supports
+cancellation of queued and running work. Follow-ups create new durable tasks
+using the selected task's completed session as context.
+
+For a selected `requires_operator` task, inspect the recorded evidence in its
+details and enter `/retry NOTE`, `/committed NOTE`, or `/failed NOTE`. A nonempty
+note is required and the decision is fenced by the displayed task revision.
+These commands are interpreted only for operator-review tasks; ordinary text
+cannot silently restart uncertain work. If another client has already decided,
+refresh the task before acting again.
 
 Task execution uses the same Alto serial runner as interactive runs. Each
 attempt is recorded in the operation ledger before execution and its outcome

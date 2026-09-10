@@ -19,7 +19,8 @@ defmodule Zekkyou.TUI.App do
        draft: "",
        focus: :composer,
        scroll: 0,
-       pending: nil
+       pending: nil,
+       submitted_draft: nil
      }}
   end
 
@@ -63,7 +64,7 @@ defmodule Zekkyou.TUI.App do
         select_task(state, code)
 
       code == "enter" and state.focus == :composer ->
-        dispatch(state, {:submit, state.draft})
+        dispatch(state, composer_action(state, state.draft))
 
       code == "backspace" and state.focus == :composer ->
         {:noreply,
@@ -88,12 +89,19 @@ defmodule Zekkyou.TUI.App do
             do: "",
             else: state.draft
 
+        {:reconcile, _resolution, _note} ->
+          if model.notice == "Decision recorded" and state.submitted_draft == state.draft,
+            do: "",
+            else: state.draft
+
         _ ->
           state.draft
       end
 
     scroll = if action == :new or match?({:select, _}, action), do: 0, else: state.scroll
-    {:noreply, %{state | model: model, draft: draft, pending: nil, scroll: scroll}}
+
+    {:noreply,
+     %{state | model: model, draft: draft, pending: nil, submitted_draft: nil, scroll: scroll}}
   end
 
   def handle_info({:DOWN, ref, :process, _pid, reason}, %{pending: %Task{ref: ref}} = state) do
@@ -132,7 +140,12 @@ defmodule Zekkyou.TUI.App do
         {state.console.perform(state.model, action, owner), action}
       end)
 
-    {:noreply, %{state | pending: task}}
+    submitted_draft =
+      if match?({:submit, _}, action) or match?({:reconcile, _, _}, action),
+        do: state.draft,
+        else: nil
+
+    {:noreply, %{state | pending: task, submitted_draft: submitted_draft}}
   end
 
   defp next_focus(:composer), do: :tasks
@@ -155,7 +168,7 @@ defmodule Zekkyou.TUI.App do
 
   defp append_draft(state, text) do
     text = Zekkyou.Console.clean_input(text)
-    available = max(0, 65_536 - byte_size(state.draft))
+    available = max(0, 32_000 - byte_size(state.draft))
 
     text =
       if byte_size(text) <= available,
@@ -163,6 +176,21 @@ defmodule Zekkyou.TUI.App do
         else: text |> binary_part(0, available) |> valid_prefix()
 
     %{state | draft: state.draft <> text}
+  end
+
+  defp composer_action(state, text) do
+    case Enum.find(state.model.tasks, &(&1.id == state.model.selected_id)) do
+      %{status: "requires_operator"} ->
+        case Regex.run(~r/\A\/(retry|committed|failed) (\S(?:.*\S)?)\z/s, text,
+               capture: :all_but_first
+             ) do
+          [resolution, note] -> {:reconcile, resolution, note}
+          _ -> {:submit, text}
+        end
+
+      _ ->
+        {:submit, text}
+    end
   end
 
   defp valid_prefix(text) do

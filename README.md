@@ -87,7 +87,8 @@ not dependencies of this service.
 
 The optional terminal package reuses Alto's terminal layout while connecting to
 an independently running service. It has a task list, saved conversation,
-activity history, composer, approval decisions, and run usage details.
+activity history, composer, approval decisions, and run usage details. The
+composer submits durable tasks; queued work appears before execution starts.
 
 ```sh
 cd packages/zekkyou_tui
@@ -106,14 +107,18 @@ standalone, native-free executable.
 Use `--socket PATH` to select a service. Tab switches between tasks and the
 composer; arrows select tasks, Enter sends, and Page Up/Down scroll activity.
 Ctrl+N starts a new task, Ctrl+K requests cancellation, Ctrl+A approves the
-shown decision, and Ctrl+D denies it. Ctrl+Q detaches. Ctrl+R reconnects after
+shown decision, and Ctrl+D denies it. For a task requiring operator review,
+inspect its evidence and enter `/retry NOTE`, `/committed NOTE`, or `/failed NOTE`
+in the composer. Decisions are revision-fenced across clients. Ctrl+Q detaches.
+Ctrl+R reconnects after
 a connection failure. Failed sends are never retried automatically; inspect
 recovered task state before resending when delivery is uncertain.
 
 The conversation shows the latest saved transcript (up to 100 messages), with
 bounded activity history alongside it. Progress appears as Alto records events;
-this initial client does not render token-by-token streaming. After a service
-restart, choose the profile explicitly when following up on a stored session.
+this initial client does not render token-by-token streaming. Durable tasks
+retain their profile after restart; when following up on an older direct-run
+session, choose the profile explicitly.
 Approval replay currently survives client disconnects while the service is
 alive; durable approval recovery belongs to milestone 4.
 

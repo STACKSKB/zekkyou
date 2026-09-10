@@ -8,14 +8,17 @@ revision is published.
 
 ## Automated checks
 
-- Zekkyou: **32 tests passed**. Includes resident execution, private state,
+- Zekkyou: **34 tests passed**. Includes resident execution, private state,
   named profiles, correlated bounded socket requests, owner cleanup, malformed
   envelopes, disconnect/reconnect, two-client conversation consistency,
   follow-up context, persisted transcript after service restart, approval
-  replay/selection, cancellation, and managed SSH process cleanup.
-- Optional terminal package: **10 tests passed**. Covers CLI option validation,
+  replay/selection, cancellation, and managed SSH process cleanup. Console
+  checks also cover delayed tasks without sessions, two-client revision-fenced
+  operator decisions, and follow-ups submitted through the durable queue.
+- Optional terminal package: **13 tests passed**. Covers CLI option validation,
   responsive layout, keyboard release handling, UTF-8 paste byte bounds,
-  preservation of edits typed during submission, and running-task selection.
+  preservation of edits typed during submission or reconciliation, operator
+  command scoping, and running-task selection.
   A real ExRatatui headless terminal submits to a real resident service,
   detaches during execution, reconnects, and verifies the rendered answer.
 - Alto: **654 regression tests passed** with `--max-cases 4`, covering the

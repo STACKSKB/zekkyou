@@ -1,6 +1,6 @@
 defmodule Zekkyou.ConsoleTest do
   use ExUnit.Case, async: false
-  alias Zekkyou.{Client, Config, Console, Service}
+  alias Zekkyou.{Client, Config, Console, Service, Tasks}
 
   defmodule Provider do
     @behaviour Alto.Provider
@@ -107,7 +107,8 @@ defmodule Zekkyou.ConsoleTest do
     start_supervised!({Service, config: config, name: name})
     recovered = Console.perform(second, :connect, self())
     assert recovered.entries == second.entries
-    assert hd(recovered.tasks).run_id == nil
+    assert hd(recovered.tasks).run_id == hd(second.tasks).run_id
+    assert hd(recovered.tasks).durable
     assert recovered.connection == "connected"
     Console.close(recovered)
   end
@@ -146,6 +147,76 @@ defmodule Zekkyou.ConsoleTest do
     disconnected = Console.perform(model, :poll, self())
     assert disconnected.connection == "disconnected"
     assert disconnected.client == nil
+  end
+
+  test "delayed tasks are selectable and cancellable before any session exists", %{
+    opts: opts,
+    name: name
+  } do
+    Tasks.command(name, "submit", %{
+      "id" => "delayed",
+      "profile" => "chat",
+      "task" => "scheduled message",
+      "delay_ms" => 60_000
+    })
+
+    model = Console.perform(Console.new(opts), :connect, self())
+    model = Console.perform(model, {:select, "delayed"}, self())
+    assert model.connection == "connected"
+    assert model.detail =~ "queued"
+    assert model.history == []
+    assert Enum.any?(model.entries, &(&1.text == "scheduled message"))
+    blocked = Console.perform(model, {:submit, "cannot follow yet"}, self())
+    assert blocked.notice =~ "still running"
+    model = Console.perform(model, :cancel, self())
+    assert model.detail =~ "cancelled"
+    refute_receive {:executing, _, _}, 100
+    Console.close(model)
+  end
+
+  test "restart exposes uncertain work and fences decisions made from stale views", %{
+    opts: opts,
+    name: name,
+    config: config
+  } do
+    model = Console.perform(Console.new(opts), :connect, self())
+    model = Console.perform(model, {:submit, "uncertain"}, self())
+    assert_receive {:executing, _, _}, 2_000
+    id = model.selected_id
+
+    model =
+      eventually(model, fn m -> Enum.any?(m.tasks, &(&1.id == id && &1.status == "running")) end)
+
+    Console.close(model)
+    stop_supervised!(Service)
+    start_supervised!({Service, config: config, name: name})
+    model = Console.perform(model, :connect, self())
+    assert model.detail =~ "requires_operator"
+    assert model.detail =~ "/retry NOTE"
+    assert model.notice == "Connected"
+
+    stale =
+      Console.perform(Console.new(opts), :connect, self())
+      |> Console.perform({:select, id}, self())
+
+    blocked = Console.perform(model, {:submit, "blind followup"}, self())
+    assert blocked.notice =~ "Resolve the uncertain outcome"
+
+    model =
+      Console.perform(model, {:reconcile, "retry", "controlled provider had no effects"}, self())
+
+    assert model.notice == "Decision recorded"
+    stale = Console.perform(stale, {:reconcile, "retry", "stale second decision"}, self())
+    assert stale.notice =~ "Request rejected"
+    assert_receive {:executing, provider, _}, 2_000
+    send(provider, {:finish, "recovered"})
+
+    model =
+      eventually(model, fn m -> Enum.any?(m.tasks, &(&1.id == id && &1.status == "completed")) end)
+
+    refute_receive {:executing, _, _}, 100
+    Console.close(model)
+    Console.close(stale)
   end
 
   defp eventually(model, predicate, attempts \\ 100)
