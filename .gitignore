@@ -1,0 +1,7 @@
+/_build/
+/deps/
+/.work/
+/zekkyou
+/erl_crash.dump
+/.state/
+*.ez
