@@ -9,7 +9,7 @@ Development is in progress; this is not yet the unattended-operation release.
 
 ## Development
 
-The dependency pins Alto commit `da4d11217e427e28a6c06ad2cd0401a8718fad4a`,
+The dependency pins Alto commit `759192bdb591e76fe8533f2d9a429c31d319a3f2`,
 which adds durable replay, owner-bound runs and delayed queue scheduling on top
 of the clean public v0.0.1 release. That revision is currently **local and
 unpublished** on `zekkyou/durable-host`. Until it is published, set `ALTO_PATH`
@@ -51,7 +51,9 @@ for build qualification, configuration, restart and upgrade instructions.
 Named [worker teams](docs/teams.md) can now plan bounded parallel assignments,
 select configured worker models, and integrate results in the lead. The
 `examples/team.exs` profile gives workers inspection tools and checkpoints the
-lead's proposed file writes. Isolated worker workspaces and mailboxes remain
+lead's proposed file writes. Optional [durable mailboxes](docs/mailboxes.md)
+support scoped team messages, receipt leases and operator inspection across
+restarts. Isolated worker workspaces and independent child recovery remain
 roadmap work.
 
 ## Run a resident service

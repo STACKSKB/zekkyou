@@ -39,7 +39,7 @@ defmodule Zekkyou.MixProject do
         nil ->
           {:alto,
            git: "https://github.com/STACKSKB/alto.git",
-           ref: "da4d11217e427e28a6c06ad2cd0401a8718fad4a"}
+           ref: "759192bdb591e76fe8533f2d9a429c31d319a3f2"}
 
         path ->
           {:alto, path: Path.expand(path)}

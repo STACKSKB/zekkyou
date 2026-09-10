@@ -410,6 +410,7 @@ defmodule Zekkyou.Tasks do
        session_id: session,
        status: status,
        usage: value.usage,
+       agent_identity: Map.get(value, :agent_identity),
        persistence: value.persistence
      }}
   end
@@ -449,6 +450,11 @@ defmodule Zekkyou.Tasks do
         "not_before_ms" => payload["not_before_ms"],
         "run_id" => (active && active.run_id) || (evidence[:run_id] || evidence["run_id"]),
         "approval" => if(status == "waiting_approval", do: checkpoint["request"], else: nil),
+        "agent_identity" =>
+          Alto.Protocol.encode_term(
+            evidence[:agent_identity] || evidence["agent_identity"] ||
+              checkpoint["agent_identity"]
+          ),
         "usage" =>
           Alto.Protocol.encode_term(
             evidence[:usage] || evidence["usage"] || checkpoint["usage"] || %{}

@@ -21,6 +21,9 @@ defmodule Zekkyou.CLI do
   zekkyou task-cancel ID [--socket PATH]
   zekkyou task-reconcile ID committed|failed|retry --revision N --note TEXT [--socket PATH]
   zekkyou task-decide ID approve|deny --revision N [--socket PATH]
+  zekkyou mailbox ROOT_RUN_ID [--cursor N] [--socket PATH]
+  zekkyou mailbox-get ROOT_RUN_ID MESSAGE_KEY [--socket PATH]
+  zekkyou mailbox-cancel ROOT_RUN_ID MESSAGE_KEY [--socket PATH]
 
   Serve owns execution. Closing status/watch clients does not stop agents.
   Configuration is trusted Elixir code. Use SSH socket forwarding for remote access.
@@ -132,6 +135,17 @@ defmodule Zekkyou.CLI do
   end
 
   defp command(["tasks"], _opts), do: {:ok, command_wire("tasks.list", %{})}
+
+  defp command(["mailbox", root], opts),
+    do:
+      {:ok,
+       command_wire("mailbox.list", %{"root" => root, "cursor" => Keyword.get(opts, :cursor, 0)})}
+
+  defp command(["mailbox-get", root, key], _opts),
+    do: {:ok, command_wire("mailbox.get", %{"root" => root, "key" => key})}
+
+  defp command(["mailbox-cancel", root, key], _opts),
+    do: {:ok, command_wire("mailbox.cancel", %{"root" => root, "key" => key})}
 
   defp command(["task", id], _opts), do: {:ok, command_wire("tasks.get", %{"id" => id})}
 

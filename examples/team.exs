@@ -5,7 +5,12 @@ provider = fn model ->
    api_key: System.get_env("ZEKKYOU_API_KEY")}
 end
 
-inspection = [Alto.Tools.ListFiles, Alto.Tools.ReadFile, Alto.Tools.SearchFiles]
+inspection = [
+  Alto.Tools.ListFiles,
+  Alto.Tools.ReadFile,
+  Alto.Tools.SearchFiles,
+  Zekkyou.Tools.Mailbox
+]
 
 workers = %{
   "inspect" => [
@@ -14,7 +19,8 @@ workers = %{
     max_steps: 8,
     system_prompt:
       "Inspect the assigned part of the workspace. Report evidence with file paths. " <>
-        "Do not delegate or edit files. Clearly distinguish findings from guesses."
+        "Do not delegate or edit files. Clearly distinguish findings from guesses. " <>
+        "You may send useful findings to the lead at mailbox address []."
   ]
 }
 

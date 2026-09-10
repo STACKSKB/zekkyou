@@ -77,6 +77,11 @@ answer. Durable tasks then require operator reconciliation.
 
 ## Recovery and remaining work
 
+Optional [durable mailboxes](mailboxes.md) support addressed messages between
+team members. The example grants this tool to the lead and inspection workers.
+Alto binds each sender and reader to its execution identity; Zekkyou supplies
+envelope validation, routing policy and operator inspection.
+
 The lead can checkpoint during integration after its workers finish. Restart and
 approval continuation preserve the completed worker results, consumed budgets
 and exact pending operation; the plan and child work are not repeated.
@@ -84,8 +89,9 @@ Completed-session follow-ups start a new planning stage.
 
 Workers currently share the configured workspace. The supplied example gives
 workers inspection tools and reserves file editing for the lead. Isolated coding
-workspaces, durable addressed mailboxes and separate child recovery are still
-pending; milestone 5 is not complete. Child runs share the parent session's
+workspaces and separate child recovery are still pending; milestone 5 is not
+complete. Mailbox durability does not make child execution independently
+recoverable. Child runs share the parent session's
 best-effort event history, not a separate durable dispatch ledger. A crash during
 active delegation parks the containing durable task for operator review.
 Checkpoint approvals inside an independently active child are not supported;

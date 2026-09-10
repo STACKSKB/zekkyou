@@ -91,8 +91,9 @@ recovery, integration and review with the lead agent. Hosted CI is out of scope.
   and budget restoration; `ec5e3fa` fixes listener cleanup during supervised
   shutdown and recovery after acceptor failure; `da4d112` adds concurrent child
   batches, inherited tool/depth authority, owned lifetime, shared accounting,
-  and bounded per-request context.
-- Zekkyou pins `da4d11217e427e28a6c06ad2cd0401a8718fad4a`. These Alto changes
+  and bounded per-request context; `759192b` adds exact matching queue claims,
+  claimed-record wire bounds and checkpointed execution-tree identities.
+- Zekkyou pins `759192bdb591e76fe8533f2d9a429c31d319a3f2`. These Alto changes
   remain local on `zekkyou/durable-host` in `/home/three/code/alto`; use
   `ALTO_PATH` until that revision is published. The initial independent checkout
   in `.work/alto` has been superseded by this normal Alto checkout.
@@ -105,7 +106,7 @@ recovery, integration and review with the lead agent. Hosted CI is out of scope.
   Reconnection reopens the tunnel without restarting work.
 - Alto now supplies resident summaries and bounded saved transcript snapshots;
   Zekkyou retains application presentation and transport policy.
-- Validation: 47 service/client/transport tests and 13 terminal tests, including
+- Validation: 53 service/client/transport tests and 13 terminal tests, including
   a real native headless terminal driving a resident task across detach/reconnect.
   Two clients recover identical conversations and follow-up messages; saved
   conversation survives service restart. The standalone service smoke check
@@ -155,11 +156,18 @@ recovery, integration and review with the lead agent. Hosted CI is out of scope.
   verify completed worker results and consumed budgets survive the lead's
   checkpoint, with no worker replay and accurate final usage. The runnable team
   example assigns inspection to workers and reserves file edits for the lead.
-- Milestone 5 still needs durable addressed mailboxes, isolated coding workspaces
+- Durable addressed mailboxes are implemented using Alto's atomic matching
+  claims and host-derived execution-tree identities. Zekkyou supplies message
+  validation, sender/recipient policy, scoped tools and operator inspection/cancellation.
+  Fresh-VM tests verify two worker messages survive the lead's approval pause,
+  restore under the same root identity despite a new run ID, and are acknowledged
+  without worker replay. Claim fencing, first-wins deduplication, bounds and
+  recipient isolation are covered. Messages do not create or wake agents.
+- Milestone 5 still needs isolated coding workspaces, mailbox retention cleanup
   and child lifecycle/recovery policy. Workers currently share the configured
   workspace; they are not independent durable queue tasks. This does not yet
   satisfy the full concurrent coding-workspace gate.
-- Next implementation: durable mailboxes, child lifecycle and isolated workspaces,
+- Next implementation: child lifecycle and isolated workspaces,
   extending shared Alto contracts where needed. Remote qualification follows
   when a host is available.
 - Recovery now restores queued work and explicitly approved checkpoints; uncertain

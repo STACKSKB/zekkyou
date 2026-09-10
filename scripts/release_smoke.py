@@ -166,6 +166,7 @@ def main(archive):
             smoke.main(verify_escript=False)
             checkpoint_smoke.main()
             team_smoke.main()
+            team_smoke.main(mailboxes=True)
             interrupted_run(base)
         finally:
             os.chdir(previous_cwd)

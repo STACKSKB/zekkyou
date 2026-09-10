@@ -8,7 +8,7 @@ revision is published.
 
 ## Automated checks
 
-- Zekkyou: **47 tests passed**. Includes resident execution, private state,
+- Zekkyou: **53 tests passed**. Includes resident execution, private state,
   named profiles, correlated bounded socket requests, owner cleanup, malformed
   envelopes, disconnect/reconnect, two-client conversation consistency,
   follow-up context, persisted transcript after service restart, approval
@@ -22,13 +22,16 @@ revision is published.
   prompts, explicit stage markers across follow-ups, and checkpointed integration
   after restart without rerunning workers. Completed tasks show final persisted
   usage rather than stale checkpoint totals.
+  Mailbox tests cover recipient/root isolation, first-wins delivery identity,
+  restart, stale claim fencing, release, encoded size bounds and scoped operator
+  inspection/cancellation. Models cannot supply sender or root identities.
 - Optional terminal package: **13 tests passed**. Covers CLI option validation,
   responsive layout, keyboard release handling, UTF-8 paste byte bounds,
   preservation of edits typed during submission or reconciliation, operator
   command scoping, and running-task selection.
   A real ExRatatui headless terminal submits to a real resident service,
   detaches during execution, reconnects, and verifies the rendered answer.
-- Alto: **690 regression tests passed** with `--max-cases 4`, covering the
+- Alto: **704 regression tests passed** with `--max-cases 4`, covering the
   shared queue/ledger recovery changes and application command envelope bounds.
   Checkpoint tests cover exact continuation and prepared-value restoration,
   model/tool batches, budget preservation, unsupported capabilities,
@@ -38,6 +41,10 @@ revision is published.
   caps, atomic reservations without overshoot, cancellation, parent death,
   tool replacement/widening rejection, inherited depth, unknown child outcomes,
   aggregate usage, and bounded per-request context without role overrides.
+  Matching queue claims cover multiple exact selector fields, due times,
+  routing past unrelated heads, append failure and receipt byte bounds.
+  Execution-tree identities follow nested delegation and exact checkpoint
+  restoration, malformed identity rejection and actual claimed-record byte limits.
 - Compilation with warnings as errors and formatting checks passed for the
   service and terminal package; Alto's core compilation passed as well.
 - The terminal launcher was exercised in a real PTY through startup,
@@ -68,6 +75,13 @@ write. After restart it uses the original prepared value without another worker
 request, within a shared five-model-request budget. Final usage includes all
 five requests and remains correct in the third VM. Providers are deterministic
 local fixtures; the prepared write is real Alto tool execution.
+
+The script also passes a second three-VM scenario with durable team mailboxes.
+Two workers each send a finding. While the lead waits for approval, operator
+commands inspect both messages. A new service restores the lead's original
+root identity under a new current run ID and receives/acknowledges both findings.
+A third VM confirms completion, acknowledgement and no worker replay, within
+a shared nine-model-request budget with all 18 tokens accounted for.
 
 `python3 -B scripts/release_smoke.py _build/prod/zekkyou-0.0.1-dev.tar.gz`
 passes against the extracted release in a separate directory containing spaces,
@@ -112,6 +126,7 @@ exercise transport management; they do not constitute remote-host qualification.
   reject live capabilities or incompatible code/configuration. Independently
   suspended child runs remain unsupported. Waiting for approval pauses active
   execution time; consumed budget counters are preserved.
-- Named teams are implemented with shared workspaces. Durable addressed mailboxes,
-  independent child lifecycle/recovery, isolated coding workspaces, memory/skills, messaging adapters and
+- Named teams and durable addressed mailboxes are implemented with shared workspaces.
+  Independent child lifecycle/recovery, isolated coding workspaces, mailbox retention cleanup,
+  memory/skills, messaging adapters and
   live remote qualification remain pending. No changes were pushed or published.
