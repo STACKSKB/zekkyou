@@ -3,8 +3,9 @@ defmodule Zekkyou.Team do
   Named worker policy for planning, bounded delegation and integration.
 
   Profiles are trusted configuration; a plan selects names and task text only.
-  Workers share the parent's durable session, with separate model
-  conversations. Optional durable mailboxes use host-derived execution identities.
+  Workers have separate model conversations. Session storage is shared by
+  default; `sessions: :separate` selects Alto's independent child transcripts.
+  Optional durable mailboxes use host-derived execution identities.
   An optional Alto workspace manager assigns independent coding checkouts.
   Independent child checkpoints remain pending.
   """
@@ -14,7 +15,9 @@ defmodule Zekkyou.Team do
 
   @spec loop(keyword()) :: Alto.Loop.Spec.t()
   def loop(opts \\ []) do
-    opts = Keyword.validate!(opts, [:workers, :max_children, :max_concurrency, :workspaces])
+    opts =
+      Keyword.validate!(opts, [:workers, :max_children, :max_concurrency, :workspaces, :sessions])
+
     max_children = Keyword.get(opts, :max_children, 4)
     max_concurrency = Keyword.get(opts, :max_concurrency, min(2, max_children))
 
@@ -23,6 +26,7 @@ defmodule Zekkyou.Team do
         max_depth: 1,
         max_children: max_children,
         max_concurrency: max_concurrency,
+        sessions: Keyword.get(opts, :sessions, :shared),
         workspaces: Keyword.get(opts, :workspaces)
       )
 

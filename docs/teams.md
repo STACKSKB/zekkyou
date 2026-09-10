@@ -87,14 +87,25 @@ approval continuation preserve the completed worker results, consumed budgets
 and exact pending operation; the plan and child work are not repeated.
 Completed-session follow-ups start a new planning stage.
 
+`Zekkyou.Team.loop(workers: workers, sessions: :separate)` opts into Alto's
+separate child session logs and transcript snapshots. The default is `:shared`.
+Each completed worker result includes its `session_id`; separate session
+summaries retain the parent session and execution-tree identity. These child
+conversations appear in saved-session listings. Inspect the saved conversation
+in the terminal or use `history SESSION` for its events. They retain their own transcript revision
+without changing the lead's conversation. This option requires a persisted lead;
+an unrecorded run does not create child sessions. Session storage remains best
+effort, and a separate conversation does not authorize child recovery or reset
+the shared execution budget.
+
 Workers share the configured workspace unless the team receives an optional
 [workspace manager](workspaces.md). The manager gives each child an independent
 Git checkout and captures a frozen patch without changing the source. The
 supplied example gives workers inspection tools and reserves file editing for
-the lead. Reviewed patch integration and separate child recovery are still
-pending; milestone 5 is not complete. Mailbox durability does not make child execution independently
-recoverable. Child runs share the parent session's
-best-effort event history, not a separate durable dispatch ledger. A crash during
+the lead. [Reviewed patch integration](workspaces.md) is available for coding
+teams; independent child recovery remains pending, so milestone 5 is not complete.
+Neither mailbox durability nor separate session history makes child execution
+independently recoverable. A crash during
 active delegation parks the containing durable task for operator review.
 Checkpoint approvals inside an independently active child are not supported;
 use supported approval policies for workers and keep durable checkpointed
@@ -103,5 +114,6 @@ qualified by the local deterministic tests.
 
 `python3 -B scripts/team_smoke.py` (after `mix escript.build`) verifies the
 complete team/approval flow across three fresh service VMs, including final
-descendant usage and a shared five-request budget. The release qualification
+descendant usage, a shared five-request budget, and unchanged separate child
+histories and transcripts across restarts. The release qualification
 script runs this same scenario against its extracted bundled runtime.

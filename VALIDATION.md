@@ -169,6 +169,33 @@ including scheduling, exact approval recovery, teams, workspace capture,
 reviewed patch integration, crash review and shutdown cleanup. Format checks,
 warning-free production compilation and the bundled build pass.
 
+## Separate child session increment
+
+Alto `04e78f3` passes 744 tests, formatting and production compilation. Its
+optional separate-session policy creates independent child transcripts, exact
+parent/run/identity links and delegation result pointers. Tests verify separate
+transcript contents and revisions, parent isolation, shared default behavior,
+summary ownership and absence of child storage for unrecorded parents. Two
+fresh VMs verify exact parent and child transcripts, history and ancestry.
+The existing authority, shared budget and cancellation regressions also pass.
+
+Zekkyou exposes the option through its team policy. Independent child
+checkpoints, durable shared budgets and recovered parent joins remain pending.
+
+The 65 service tests pass, including separate worker transcript storage and
+completed-session follow-up. All 13 terminal tests pass with the original
+recorded seed. An earlier terminal transcript timeout did not reproduce in the
+seeded suite or 20 repeated integration runs. A proposed production change was
+discarded because its regression also passed the original code; the terminal
+test now reports state on a future timeout without relaxing its assertions.
+
+The full relocated bundled-release regression passes against this Alto pin.
+The strengthened team qualification also passes separately against the bundled
+CLI with `sessions: :separate`, both with and without mailboxes: child summaries,
+transcripts and CLI histories are identical across the lead's approval restart
+and another service restart after completion. Workers execute only once. The
+full regression's team scenarios now include these additional checks.
+
 ## Remaining qualification and limits
 
 - No live model provider, remote SSH daemon, or Discord integration was tested.

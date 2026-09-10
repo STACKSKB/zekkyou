@@ -98,7 +98,7 @@ workers = %{"inspect" => [provider: {TeamSmoke.Provider, worker: true},
 profile = Alto.Config.new(
   provider: TeamSmoke.Provider,
   system_prompt: Zekkyou.Team.instructions(workers, 2),
-  loop: Zekkyou.Team.loop(workers: workers, max_children: 2, max_concurrency: 2),
+  loop: Zekkyou.Team.loop(workers: workers, max_children: 2, max_concurrency: 2, sessions: :separate),
   tools: [TeamSmoke.Guarded] ++ mailbox_tools,
   approval: Alto.Approvals.Checkpoint,
   checkpoint_version: "team-smoke-v1",
@@ -135,6 +135,22 @@ def main(mailboxes=False):
             return [json.loads(line) for line in
                     (base / "state/queues/team-messages.jsonl").read_text().splitlines()]
 
+        def child_sessions(parent):
+            summaries = service.command(environment, socket_path, "status")[-1]["sessions"]
+            children = [s for s in summaries if s["parent_session_id"] == parent]
+            assert len(children) == 2, summaries
+            assert sorted(s["agent_identity"]["path"] for s in children) == [["a"], ["b"]]
+            saved = {}
+            for child in children:
+                assert child["runs"] == child["completed_runs"] == 1, child
+                assert child["last_outcome"] == "ok", child
+                session = child["id"]
+                transcript = json.loads((base / "state/sessions" / (session + ".transcript.json")).read_text())
+                assert any(m.get("content") == "inspected" for m in transcript["messages"]), transcript
+                history = service.command(environment, socket_path, "history", session)[-1]
+                saved[session] = (child, transcript, history)
+            return saved
+
         process = service.launch(environment, socket_path, config)
         try:
             service.command(environment, socket_path, "schedule", "team", "inspect then integrate",
@@ -142,6 +158,7 @@ def main(mailboxes=False):
             waiting = service.wait_for(environment, socket_path, "team", "waiting_approval")
             assert (workspace / "workers").read_text() == worker_calls
             assert waiting["usage"]["total_tokens"] == waiting_tokens, waiting
+            saved_children = child_sessions(waiting["session_id"])
             if mailboxes:
                 assert [r["type"] for r in mailbox_records()] == ["put", "put"]
                 root = waiting["agent_identity"]["root_run_id"]
@@ -164,6 +181,7 @@ def main(mailboxes=False):
             recovered = service.task(environment, socket_path, "team")
             assert recovered["revision"] == waiting["revision"], recovered
             assert recovered["approval"] == waiting["approval"], recovered
+            assert child_sessions(recovered["session_id"]) == saved_children
             if mailboxes:
                 assert service.command(environment, socket_path, "mailbox", root)[-1]["messages"] == pending
             service.command(environment, socket_path, "task-decide", "team", "approve",
@@ -187,6 +205,7 @@ def main(mailboxes=False):
         try:
             replay = service.task(environment, socket_path, "team")
             assert replay["status"] == "completed"
+            assert child_sessions(replay["session_id"]) == saved_children
             assert replay["usage"]["total_tokens"] == completed_tokens, replay
             assert (workspace / "workers").read_text() == worker_calls
             assert (workspace / "integrated").read_text() == "original"
@@ -198,7 +217,7 @@ def main(mailboxes=False):
             service.stop(process)
 
     print("PASS: " + ("scoped durable team mailboxes, retained-state compaction, restart, acknowledgement, stable identity" if mailboxes
-                      else "named workers, shared budget/usage, exact integration approval, fresh-VM recovery"))
+                      else "named workers, separate child sessions, shared budget/usage, exact integration approval, fresh-VM recovery"))
 
 
 if __name__ == "__main__":

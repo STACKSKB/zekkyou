@@ -97,8 +97,10 @@ recovery, integration and review with the lead agent. Hosted CI is out of scope.
   patch capture and revision-fenced resource cleanup; `e40a99b` adds prepared
   patch application with affected-file snapshots, durable application records,
   and conservative interruption handling; `e487d8e` adds opt-in queue compaction
-  preserving retained records, active claims and completed delivery identities.
-- Zekkyou pins `e487d8e92abe265741c48bc11a77d9df8ec30b53`. These Alto changes
+  preserving retained records, active claims and completed delivery identities;
+  `04e78f3` adds optional separate child sessions, transcript ownership and
+  durable parent/identity links in histories and results.
+- Zekkyou pins `04e78f3444fa3f01bc4992dc541ce1f49c167e90`. These Alto changes
   remain local on `zekkyou/durable-host` in `/home/three/code/alto`; use
   `ALTO_PATH` until that revision is published. The initial independent checkout
   in `.work/alto` has been superseded by this normal Alto checkout.
@@ -193,10 +195,15 @@ recovery, integration and review with the lead agent. Hosted CI is out of scope.
   operator command. Active claims, unread messages and the configured completed
   deduplication window survive cleanup and restart; unread messages still require
   acknowledgement or explicit cancellation. No age-based message expiry is implied.
+- Separate child session storage is available through the team's optional
+  `sessions: :separate` setting. Alto owns each child transcript and preserves
+  ancestry links; shared storage remains the default. Completed conversations
+  can be inspected independently, while dispatch and joins remain owned by the
+  live parent. Fresh-VM checks recover the parent and child histories exactly.
 - Milestone 5 still needs independent child lifecycle/recovery. A workspace resource is not an independently resumable child job. The full integration
   gate remains outstanding.
 - Next implementation: independent child lifecycle/recovery,
-  including durable shared budgets, separate child sessions and recoverable
+  including durable shared budgets, child dispatch records and recoverable
   parent joins in Alto. Remote qualification follows
   when a host is available.
 - Recovery now restores queued work and explicitly approved checkpoints; uncertain

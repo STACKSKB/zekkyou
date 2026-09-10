@@ -104,7 +104,8 @@ defmodule Zekkyou.TeamTest do
                  Zekkyou.Team.loop(
                    workers: %{cheap: [provider: {CheapProvider, test_pid: pid}]},
                    max_children: 2,
-                   max_concurrency: 1
+                   max_concurrency: 1,
+                   sessions: :separate
                  ),
                provider: {LeadProvider, test_pid: pid},
                system_prompt: Zekkyou.Team.instructions([:cheap], 2),
@@ -113,6 +114,13 @@ defmodule Zekkyou.TeamTest do
              )
 
     assert result.output == "integrated"
+    assert result.persistence == :ok
+    children = Enum.find(result.events, &(&1.type == :subagents_completed)).data.results
+    [child] = children
+    assert child.session_id != result.session_id
+    assert {:ok, transcript} = Alto.Session.transcript(child.session_id, session_dir: dir)
+    assert Enum.any?(transcript.messages, &(&1["content"] == "finding"))
+    refute Enum.any?(transcript.messages, &(&1["content"] == "original task"))
     assert_receive {:worker_request, worker_request}, 2_000
     assert hd(worker_request.messages)["content"] =~ "Carry out the assigned task"
     refute hd(worker_request.messages)["content"] =~ "Registered profiles"
