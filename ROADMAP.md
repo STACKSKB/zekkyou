@@ -83,12 +83,31 @@ recovery, integration and review with the lead agent. Hosted CI is out of scope.
   with the application scheduling policy.
 - Alto mechanisms committed on `zekkyou/durable-host`: `0ea2ec0` adds replay
   and owner-bound run lifetime; `d9604e2` adds due times/fenced rescheduling;
-  `262bd13` makes replay independent of atoms loaded in the old VM.
-- Zekkyou pins `262bd132a44e506ca103c09cef840fd3b5716b33`. These Alto changes
-  remain local in `.work/alto`; use `ALTO_PATH` until that revision is published.
-- Validation: 10 Zekkyou tests, 611 Alto tests, warning-free compile/format
-  checks, and standalone real-file execution/reconnect/fresh-VM replay.
-- Next: milestone 3, the reconnecting TUI and live SSH qualification.
+  `262bd13` makes replay independent of atoms loaded in the old VM;
+  `8ecceaf` supplies run summaries and saved conversations for reconnecting clients.
+- Zekkyou pins `8ecceaf3a84831c15616b71016b9f7ac52ed3f95`. These Alto changes
+  remain local on `zekkyou/durable-host` in `/home/three/code/alto`; use
+  `ALTO_PATH` until that revision is published. The initial independent checkout
+  in `.work/alto` has been superseded by this normal Alto checkout.
+- TUI implementation: optional `packages/zekkyou_tui` client reuses Alto's
+  layout, selects resident/stored sessions, sends follow-ups, displays saved
+  conversation and bounded activity, handles approval/cancel commands, and
+  shows completion usage. Its network work runs outside the renderer.
+- Managed SSH transport uses OpenSSH, a private forwarding socket, existing
+  authentication/host checks, bounded startup diagnostics, and owner cleanup.
+  Reconnection reopens the tunnel without restarting work.
+- Alto now supplies resident summaries and bounded saved transcript snapshots;
+  Zekkyou retains application presentation and transport policy.
+- Validation: 17 service/client/transport tests and 10 terminal tests, including
+  a real native headless terminal driving a resident task across detach/reconnect.
+  Two clients recover identical conversations and follow-up messages; saved
+  conversation survives service restart. The standalone service smoke check
+  still verifies fresh-VM history and absence of native UI dependencies.
+- Milestone 3 implementation is committed; live remote SSH/reconnect
+  qualification remains outstanding because no SSH host is configured.
+  Native terminal libraries require the on-disk launcher, not an escript.
+- Next implementation: milestone 4, unattended work and conservative recovery,
+  alongside remote qualification when a host is available.
 - Unattended task policy, durable approvals/checkpoints, automatic safe recovery,
   concurrent agent coordination, memory/skills and messaging adapters remain
   pending. The existing queue extension is a mechanism, not that application.

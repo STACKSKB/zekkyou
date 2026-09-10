@@ -5,3 +5,9 @@
 /erl_crash.dump
 /.state/
 *.ez
+
+/packages/*/_build/
+/packages/*/deps/
+/packages/*/zekkyou-tui
+/packages/*/zekkyou_tui
+/packages/*/erl_crash.dump

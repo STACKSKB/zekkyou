@@ -1,0 +1,160 @@
+defmodule Zekkyou.TUI.View do
+  @moduledoc """
+  Pure view layer for the optional Zekkyou terminal interface.
+
+  The view deliberately only turns a state map into ExRatatui widgets.  It
+  performs no I/O, which makes it useful both to the controller and to tests.
+  """
+
+  alias Alto.TUI.Layout
+  alias ExRatatui.Layout.Rect
+  alias ExRatatui.Widgets.{Block, List, Paragraph}
+
+  @type state :: map()
+  @type rendered :: {ExRatatui.widget(), Rect.t()}
+
+  @doc "Build all widgets and their screen rectangles for one frame."
+  @spec widgets(state(), Rect.t()) :: [rendered()]
+  def widgets(state, %Rect{} = viewport) when is_map(state) do
+    geometry = Layout.calculate(viewport.width, viewport.height)
+    geometry = translate(geometry, viewport.x, viewport.y)
+
+    tasks = Map.get(state, :tasks, [])
+    selected_id = Map.get(state, :selected_id)
+    task_items = Enum.map(tasks, &task_label/1)
+    selected = Enum.find_index(tasks, &(Map.get(&1, :id) == selected_id))
+
+    rail =
+      if geometry.rail do
+        list = %List{
+          items: task_items,
+          selected: selected,
+          highlight_symbol: "› ",
+          block: panel(if(Map.get(state, :focus) == :tasks, do: "Tasks •", else: "Tasks"))
+        }
+
+        [{list, geometry.rail}]
+      else
+        []
+      end
+
+    transcript = %Paragraph{
+      text: transcript_text(Map.get(state, :entries, [])) <> compact_detail(state, geometry),
+      wrap: true,
+      scroll: {max(Map.get(state, :scroll, 0), 0), 0},
+      block: panel("Conversation • " <> selected_title(state))
+    }
+
+    settings =
+      if geometry.settings.height > 0 do
+        notice = Map.get(state, :notice, "") |> to_string_or_empty()
+
+        [
+          {%Paragraph{text: if(notice == "", do: " ", else: notice)}, geometry.settings}
+        ]
+      else
+        []
+      end
+
+    composer_text =
+      case Map.get(state, :draft, "") |> to_string_or_empty() do
+        "" -> "Type a message, then press Enter to send."
+        draft -> draft
+      end
+
+    composer = %Paragraph{
+      text: composer_text,
+      wrap: true,
+      block:
+        panel(
+          if(Map.get(state, :focus, :composer) == :composer, do: "Composer •", else: "Composer")
+        )
+    }
+
+    details =
+      if geometry.details do
+        detail = Map.get(state, :detail, "") |> to_string_or_empty()
+
+        [
+          {%Paragraph{
+             text: if(detail == "", do: "No task selected.", else: detail),
+             wrap: true,
+             block: panel("Details")
+           }, geometry.details}
+        ]
+      else
+        []
+      end
+
+    status = %Paragraph{
+      text: status_text(state)
+    }
+
+    center =
+      if geometry.rail == nil and Map.get(state, :focus) == :tasks,
+        do: %List{
+          items: task_items,
+          selected: selected,
+          highlight_symbol: "› ",
+          block: panel("Tasks • Tab to compose")
+        },
+        else: transcript
+
+    rail ++
+      [{center, geometry.transcript}] ++
+      settings ++ [{composer, geometry.composer}] ++ details ++ [{status, geometry.status}]
+  end
+
+  defp selected_title(state) do
+    case Enum.find(Map.get(state, :tasks, []), &(&1.id == Map.get(state, :selected_id))) do
+      nil -> "New task"
+      task -> String.slice(task.title, 0, 40)
+    end
+  end
+
+  defp compact_detail(state, %{details: nil}) do
+    "\n\n" <> (Map.get(state, :detail) || "")
+  end
+
+  defp compact_detail(_state, _geometry), do: ""
+
+  defp panel(title), do: %Block{title: title, borders: [:all], border_type: :rounded}
+
+  defp task_label(task) do
+    status = task |> Map.get(:status, "") |> to_string_or_empty()
+    title = task |> Map.get(:title, "Untitled task") |> to_string_or_empty()
+    if status == "", do: title, else: "#{status}  #{title}"
+  end
+
+  defp transcript_text([]), do: "No messages yet. Start a conversation with the composer below."
+
+  defp transcript_text(entries) do
+    entries
+    |> Enum.map(fn entry ->
+      kind = entry |> Map.get(:kind, :message) |> to_string_or_empty() |> String.upcase()
+      text = entry |> Map.get(:text, "") |> to_string_or_empty()
+      "#{kind}: #{text}"
+    end)
+    |> Enum.join("\n")
+  end
+
+  defp status_text(state) do
+    connection = state |> Map.get(:connection, "offline") |> to_string_or_empty()
+
+    " #{connection} | ^Q quit ^R reconnect ^N new Tab focus ^K cancel ^A approve ^D deny Enter send"
+  end
+
+  defp to_string_or_empty(value) when is_binary(value), do: value
+  defp to_string_or_empty(nil), do: ""
+  defp to_string_or_empty(value), do: to_string(value)
+
+  defp translate(geometry, dx, dy) do
+    Map.new(geometry, fn
+      {key, %Rect{} = rect} -> {key, shift(rect, dx, dy)}
+      {key, nil} -> {key, nil}
+      pair -> pair
+    end)
+  end
+
+  defp shift(%Rect{} = rect, dx, dy), do: %{rect | x: rect.x + dx, y: rect.y + dy}
+end

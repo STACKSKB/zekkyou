@@ -1,0 +1,6 @@
+#!/bin/sh
+# Native terminal libraries must be loaded from disk, not from an escript ZIP.
+set -eu
+package_dir=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
+cd "$package_dir"
+exec mix run -e 'Zekkyou.TUI.CLI.main(System.argv())' -- "$@"

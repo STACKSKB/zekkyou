@@ -24,7 +24,7 @@ defmodule Zekkyou.Client do
   def connect(path, opts \\ [])
 
   def connect(path, opts) when is_binary(path) do
-    GenServer.start(__MODULE__, {path, opts, self()})
+    GenServer.start(__MODULE__, {path, opts, Keyword.get(opts, :owner, self())})
     |> case do
       {:ok, pid} -> {:ok, %__MODULE__{pid: pid}}
       other -> other
@@ -86,7 +86,8 @@ defmodule Zekkyou.Client do
     max_event_bytes = Keyword.get(opts, :max_event_bytes, 8_000_000)
     timeout = Keyword.get(opts, :connect_timeout, @default_timeout)
 
-    with true <- valid_bound?(max_line_bytes),
+    with true <- is_pid(owner),
+         true <- valid_bound?(max_line_bytes),
          true <- valid_bound?(max_pending),
          true <- valid_bound?(max_events),
          true <- valid_bound?(max_event_bytes) and valid_timeout?(timeout),

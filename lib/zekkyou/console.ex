@@ -1,0 +1,426 @@
+defmodule Zekkyou.Console do
+  @moduledoc """
+  Transport-independent state for a reconnecting terminal client.
+
+  Call `perform/3` outside the rendering process, passing that process as owner.
+  Reads are repeatable; failed submissions are never retried automatically.
+  History uses Alto's persisted cursors, independently of live notification IDs.
+  """
+
+  alias Zekkyou.{Client, Config, SSH}
+
+  defstruct opts: [],
+            client: nil,
+            tunnel: nil,
+            tasks: [],
+            selected_id: nil,
+            entries: [],
+            detail: "",
+            connection: "offline",
+            notice: "",
+            approvals: %{},
+            history: [],
+            cursor: 0,
+            transcript: [],
+            history_gap: false,
+            history_trimmed: false,
+            transcript_trimmed: false,
+            history_more: false,
+            live: %{}
+
+  def new(opts \\ []), do: %__MODULE__{opts: opts}
+
+  def perform(model, action, owner) do
+    do_perform(model, action, owner) |> present()
+  catch
+    {:console, reason} -> failed(model, action, reason)
+    :exit, reason -> failed(model, action, reason)
+  end
+
+  def close(model) do
+    if model.client, do: Client.close(model.client)
+    if model.tunnel, do: SSH.close(model.tunnel)
+    :ok
+  end
+
+  defp do_perform(model, :connect, owner) do
+    close(model)
+    {path, tunnel} = transport(model.opts, owner)
+
+    case Client.connect(path, owner: owner) do
+      {:ok, client} ->
+        connected = %{
+          model
+          | client: client,
+            tunnel: tunnel,
+            connection: "connected",
+            approvals: %{},
+            live: %{},
+            notice: "Connected"
+        }
+
+        try do
+          # Approval/result notifications are delivered regardless of domain.
+          request(client, %{type: "attach", domains: ["live"]})
+          refresh(reset_history(connected))
+        catch
+          kind, reason ->
+            close(connected)
+            :erlang.raise(kind, reason, __STACKTRACE__)
+        end
+
+      {:error, reason} ->
+        if tunnel, do: SSH.close(tunnel)
+        throw({:console, reason})
+    end
+  end
+
+  defp do_perform(model, :new, _owner),
+    do: reset_history(%{model | selected_id: nil, notice: "New task"})
+
+  defp do_perform(model, {:select, id}, _owner) do
+    if Enum.any?(model.tasks, &(&1.id == id)),
+      do: load_history(reset_history(%{model | selected_id: id, notice: ""})),
+      else: %{model | notice: "Task is no longer available"}
+  end
+
+  defp do_perform(%{client: nil} = model, _action, _owner),
+    do: %{model | notice: "Reconnect before sending commands"}
+
+  defp do_perform(model, :poll, _owner), do: refresh(model)
+
+  defp do_perform(model, {:submit, text}, _owner) do
+    task = selected(model)
+
+    cond do
+      String.trim(text) == "" ->
+        %{model | notice: "Enter a message first"}
+
+      byte_size(text) > 65_536 ->
+        %{model | notice: "Message exceeds 64 KiB"}
+
+      task && task.status in ["running", "waiting"] ->
+        %{model | notice: "This task is still running; start a new task for independent work"}
+
+      true ->
+        profile = (task && task.config) || Keyword.get(model.opts, :profile, "coding")
+        command = %{type: "start_run", config: profile, task: text}
+        command = if task, do: Map.put(command, :resume, task.session_id), else: command
+        reply = request(model.client, command)
+        model = reset_history(%{model | selected_id: reply["session_id"], notice: "Sent"})
+        # A successful submission stays successful even if the subsequent refresh fails.
+        try do
+          refresh(model)
+        catch
+          {:console, reason} ->
+            %{
+              failed(model, :poll, reason)
+              | notice: "Sent; reconnect to recover progress: #{inspect(reason)}"
+            }
+        end
+    end
+  end
+
+  defp do_perform(model, :cancel, _owner) do
+    case selected(model) do
+      %{run_id: run, status: status} when not is_nil(run) and status in ["running", "waiting"] ->
+        request(model.client, %{type: "cancel", run_id: run, reason: "user"})
+        %{model | notice: "Cancellation requested"}
+
+      _ ->
+        %{model | notice: "No running task selected"}
+    end
+  end
+
+  defp do_perform(model, decision, _owner) when decision in [:approve, :deny] do
+    case selected_approvals(model) do
+      [] ->
+        %{model | notice: "No pending decision for this task"}
+
+      [approval | _] ->
+        answer = if decision == :approve, do: "approve", else: %{"deny" => "user"}
+
+        request(model.client, %{
+          type: "approval_response",
+          request_id: approval["id"],
+          decision: answer
+        })
+
+        %{model | approvals: Map.delete(model.approvals, approval["id"]), notice: "Decision sent"}
+    end
+  end
+
+  defp transport(opts, owner) do
+    case Keyword.get(opts, :ssh) do
+      nil ->
+        {Keyword.get(opts, :socket, Path.join(Config.default_state_dir(), "service.sock")), nil}
+
+      host ->
+        ssh_opts = opts |> Keyword.take([:port]) |> Keyword.put(:owner, owner)
+
+        case SSH.open(host, Keyword.get(opts, :remote_socket), ssh_opts) do
+          {:ok, tunnel} -> {SSH.path(tunnel), tunnel}
+          {:error, reason} -> throw({:console, reason})
+        end
+    end
+  end
+
+  defp refresh(model) do
+    model = drain(model, 200)
+    runs = request(model.client, %{type: "runs"})["runs"]
+    sessions = request(model.client, %{type: "sessions"})["sessions"]
+    tasks = merge_tasks(sessions, runs, model.opts)
+    %{model | tasks: tasks} |> drain(200) |> load_history()
+  end
+
+  defp merge_tasks(sessions, runs, opts) do
+    stored =
+      Map.new(sessions, fn s ->
+        status =
+          cond do
+            s["runs"] > s["completed_runs"] -> "interrupted"
+            s["last_outcome"] == "ok" -> "completed"
+            true -> s["last_outcome"] || "stored"
+          end
+
+        {s["id"],
+         %{
+           id: s["id"],
+           session_id: s["id"],
+           run_id: nil,
+           title: clean(s["task"] || "Untitled task"),
+           status: status,
+           config: Keyword.get(opts, :profile, "coding"),
+           usage: %{},
+           started_at_ms: s["started_at_ms"] || 0
+         }}
+      end)
+
+    runs
+    |> Enum.reverse()
+    |> Enum.reduce(stored, fn r, acc ->
+      id = r["session_id"] || r["id"]
+      status = if r["pending_approvals"] > 0, do: "waiting", else: r["status"]
+
+      Map.put(acc, id, %{
+        id: id,
+        session_id: r["session_id"],
+        run_id: r["id"],
+        title: clean(r["title"] || "Untitled task"),
+        status: status,
+        config: r["config"],
+        usage: r["usage"] || %{},
+        started_at_ms: r["started_at_ms"] || 0
+      })
+    end)
+    |> Map.values()
+    |> Enum.sort_by(&{&1.started_at_ms, &1.id}, :desc)
+  end
+
+  defp load_history(%{selected_id: nil} = model), do: model
+  defp load_history(%{client: nil} = model), do: model
+
+  defp load_history(model) do
+    page =
+      request(model.client, %{
+        type: "session_events",
+        session_id: model.selected_id,
+        cursor: model.cursor,
+        limit: 100
+      })
+
+    history = model.history ++ page["events"]
+
+    model = %{
+      model
+      | history: Enum.take(history, -500),
+        cursor: page["last_cursor"],
+        history_more: not is_nil(page["next_cursor"]),
+        history_gap: model.history_gap or page["gap"],
+        history_trimmed: model.history_trimmed or length(history) > 500
+    }
+
+    case Client.request(model.client, %{type: "session_transcript", session_id: model.selected_id}) do
+      {:ok, snapshot} ->
+        %{model | transcript: snapshot["messages"], transcript_trimmed: snapshot["truncated"]}
+
+      {:error, {:server, _, detail}}
+      when detail in ["no_resumable_transcript", ":no_resumable_transcript"] ->
+        model
+
+      {:error, reason} ->
+        throw({:console, reason})
+    end
+  catch
+    {:console, {:server, "not_found", _} = reason} ->
+      case selected(model) do
+        %{run_id: run, status: status}
+        when not is_nil(run) and status in ["running", "waiting"] ->
+          model
+
+        _ ->
+          throw({:console, reason})
+      end
+  end
+
+  defp drain(model, 0), do: model
+
+  defp drain(model, remaining) do
+    case Client.next(model.client, 0) do
+      {:ok, event} -> model |> notification(event) |> drain(remaining - 1)
+      {:error, :timeout} -> model
+      {:error, reason} -> throw({:console, reason})
+    end
+  end
+
+  defp notification(model, %{"type" => "approval_request", "request" => request}),
+    do: %{model | approvals: Map.put(model.approvals, request["id"], request)}
+
+  defp notification(model, %{"type" => "approval_resolved", "request" => request}),
+    do: %{model | approvals: Map.delete(model.approvals, request["id"])}
+
+  defp notification(model, %{"type" => "result", "run_id" => run}),
+    do: %{
+      model
+      | approvals: Map.reject(model.approvals, fn {_, a} -> a["run_id"] == run end),
+        live: Map.delete(model.live, run)
+    }
+
+  defp notification(model, %{"type" => "event", "run_id" => run, "event" => event}),
+    do: %{model | live: Map.put(model.live, run, clean(event["type"]))}
+
+  defp notification(_model, %{"type" => "overflow"} = event),
+    do: throw({:console, {:notification_overflow, event["run_id"], event["domain"]}})
+
+  defp notification(model, _), do: model
+
+  defp reset_history(model),
+    do: %{
+      model
+      | history: [],
+        cursor: 0,
+        transcript: [],
+        entries: [],
+        history_gap: false,
+        history_trimmed: false,
+        transcript_trimmed: false,
+        history_more: false
+    }
+
+  defp present(model) do
+    task = selected(model)
+
+    conversation =
+      model.transcript
+      |> Enum.reject(&(&1["role"] == "system"))
+      |> Enum.map(
+        &%{kind: &1["role"] || "message", text: clean(&1["content"] || &1["tool_calls"])}
+      )
+
+    activity =
+      Enum.map(model.history, &history_entry(&1, conversation == [])) |> Enum.reject(&is_nil/1)
+
+    entries = conversation ++ activity
+    entries = if entries == [] and task, do: [%{kind: :user, text: task.title}], else: entries
+
+    notices =
+      []
+      |> flag(model.history_gap, "History has a gap; reconnect to reload")
+      |> flag(model.history_more, "Loading older activity…")
+      |> flag(model.history_trimmed, "Showing the latest 500 activity records")
+      |> flag(model.transcript_trimmed, "Showing the latest 100 conversation messages")
+
+    entries = Enum.map(notices, &%{kind: :notice, text: &1}) ++ entries
+
+    detail =
+      if task do
+        approval =
+          case selected_approvals(model) do
+            [] ->
+              ""
+
+            [a | rest] ->
+              "\nDecision: #{clean(a["tool"])}\n#{clean(a["arguments"])}\n#{clean(a["details"])}\nCtrl+A approve / Ctrl+D deny\n#{length(rest)} more pending"
+          end
+
+        "#{task.status}\nProfile: #{clean(task.config)}\nSession: #{task.session_id}\nRun: #{task.run_id || "not resident"}\nUsage: #{clean(task.usage)}\n#{Map.get(model.live, task.run_id, "")}#{approval}"
+      else
+        "New task\nProfile: #{clean(Keyword.get(model.opts, :profile, "coding"))}"
+      end
+
+    %{model | entries: entries, detail: detail}
+  end
+
+  defp history_entry(%{"event" => "model_completed", "data" => data}, true),
+    do: %{kind: :assistant, text: clean(data["message"])}
+
+  defp history_entry(%{"event" => "model_completed"}, false), do: nil
+
+  defp history_entry(%{"event" => event, "data" => data}, _) do
+    %{kind: :activity, text: clean(event) <> ": " <> clean(data)}
+  end
+
+  defp selected(model), do: Enum.find(model.tasks, &(&1.id == model.selected_id))
+
+  defp selected_approvals(model) do
+    run =
+      case selected(model) do
+        nil -> nil
+        task -> task.run_id
+      end
+
+    model.approvals
+    |> Map.values()
+    |> Enum.filter(&(&1["run_id"] == run))
+    |> Enum.sort_by(& &1["id"])
+  end
+
+  defp request(client, command) do
+    case Client.request(client, command) do
+      {:ok, reply} -> reply
+      {:error, reason} -> throw({:console, reason})
+    end
+  end
+
+  defp failed(model, action, {:server, _, _} = reason) when action != :connect,
+    do: %{model | notice: "Request rejected: #{clean(reason)}"}
+
+  defp failed(model, action, reason) do
+    close(model)
+
+    suffix =
+      if match?({:submit, _}, action),
+        do: "; send outcome unknown—reconnect and inspect before resending",
+        else: "; Ctrl+R reconnect"
+
+    %{
+      model
+      | client: nil,
+        tunnel: nil,
+        connection: "disconnected",
+        notice: clean(reason) <> suffix
+    }
+  end
+
+  defp flag(list, true, text), do: list ++ [text]
+  defp flag(list, _, _), do: list
+
+  @doc "Bound display values and remove terminal control characters."
+  def clean(value) do
+    text =
+      cond do
+        is_binary(value) -> value
+        is_nil(value) -> ""
+        true -> inspect(value, limit: 30, printable_limit: 8_000)
+      end
+
+    text = clean_input(text)
+
+    if String.length(text) > 8_000,
+      do: String.slice(text, 0, 8_000) <> "… [truncated]",
+      else: text
+  end
+
+  @doc false
+  def clean_input(text), do: String.replace(text, ~r/[\x00-\x08\x0B-\x1F\x7F-\x9F]/u, "")
+end
