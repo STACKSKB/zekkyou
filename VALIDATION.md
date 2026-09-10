@@ -8,7 +8,7 @@ revision is published.
 
 ## Automated checks
 
-- Zekkyou: **42 tests passed**. Includes resident execution, private state,
+- Zekkyou: **47 tests passed**. Includes resident execution, private state,
   named profiles, correlated bounded socket requests, owner cleanup, malformed
   envelopes, disconnect/reconnect, two-client conversation consistency,
   follow-up context, persisted transcript after service restart, approval
@@ -18,18 +18,26 @@ revision is published.
   Durable approval tests cover restart, worker-slot release, multiple approval
   segments under one retry allowance, denial, cancellation during claim cleanup,
   and a real prepared write rejecting a subsequently changed file.
+  Team tests cover named profiles, strict whole-plan validation, separate worker
+  prompts, explicit stage markers across follow-ups, and checkpointed integration
+  after restart without rerunning workers. Completed tasks show final persisted
+  usage rather than stale checkpoint totals.
 - Optional terminal package: **13 tests passed**. Covers CLI option validation,
   responsive layout, keyboard release handling, UTF-8 paste byte bounds,
   preservation of edits typed during submission or reconciliation, operator
   command scoping, and running-task selection.
   A real ExRatatui headless terminal submits to a real resident service,
   detaches during execution, reconnects, and verifies the rendered answer.
-- Alto: **674 regression tests passed** with `--max-cases 4`, covering the
+- Alto: **690 regression tests passed** with `--max-cases 4`, covering the
   shared queue/ledger recovery changes and application command envelope bounds.
   Checkpoint tests cover exact continuation and prepared-value restoration,
   model/tool batches, budget preservation, unsupported capabilities,
   configuration mismatch, and bounded custom snapshot callbacks. Listener tests
   also verify supervised socket cleanup and termination after acceptor failure.
+  Delegation tests exercise concurrent batches, ordered outcomes, shared model
+  caps, atomic reservations without overshoot, cancellation, parent death,
+  tool replacement/widening rejection, inherited depth, unknown child outcomes,
+  aggregate usage, and bounded per-request context without role overrides.
 - Compilation with warnings as errors and formatting checks passed for the
   service and terminal package; Alto's core compilation passed as well.
 - The terminal launcher was exercised in a real PTY through startup,
@@ -54,10 +62,17 @@ work. The second recovers the same request/revision, approves, and executes the
 original prepared value after its input changed. The third confirms completion
 without another effect.
 
+`python3 -B scripts/team_smoke.py` passes across three fresh VMs. A lead plans
+two named workers, collects their results, and checkpoints a prepared integration
+write. After restart it uses the original prepared value without another worker
+request, within a shared five-model-request budget. Final usage includes all
+five requests and remains correct in the third VM. Providers are deterministic
+local fixtures; the prepared write is real Alto tool execution.
+
 `python3 -B scripts/release_smoke.py _build/prod/zekkyou-0.0.1-dev.tar.gz`
 passes against the extracted release in a separate directory containing spaces,
-with system Erlang/Elixir/Mix absent from PATH. It runs the execution and
-checkpoint smoke scenarios through the bundled CLI, checks exact forwarding of
+with system Erlang/Elixir/Mix absent from PATH. It runs the execution, checkpoint
+and team smoke scenarios through the bundled CLI, checks exact forwarding of
 task text containing shell syntax and newlines, rejects invalid configuration and
 duplicate service ownership, verifies private state, and confirms that a crash
 after an external file effect parks the task across subsequent restarts. SIGTERM
@@ -97,5 +112,6 @@ exercise transport management; they do not constitute remote-host qualification.
   reject live capabilities or incompatible code/configuration. Independently
   suspended child runs remain unsupported. Waiting for approval pauses active
   execution time; consumed budget counters are preserved.
-- Agent coordination, memory/skills, messaging adapters and
+- Named teams are implemented with shared workspaces. Durable addressed mailboxes,
+  independent child lifecycle/recovery, isolated coding workspaces, memory/skills, messaging adapters and
   live remote qualification remain pending. No changes were pushed or published.

@@ -449,7 +449,10 @@ defmodule Zekkyou.Tasks do
         "not_before_ms" => payload["not_before_ms"],
         "run_id" => (active && active.run_id) || (evidence[:run_id] || evidence["run_id"]),
         "approval" => if(status == "waiting_approval", do: checkpoint["request"], else: nil),
-        "usage" => checkpoint["usage"] || %{},
+        "usage" =>
+          Alto.Protocol.encode_term(
+            evidence[:usage] || evidence["usage"] || checkpoint["usage"] || %{}
+          ),
         "session_id" =>
           (active && active.session_id) || (evidence[:session_id] || evidence["session_id"]) ||
             checkpoint["session_id"],

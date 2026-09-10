@@ -18,6 +18,7 @@ from pathlib import Path
 
 import checkpoint_smoke
 import smoke
+import team_smoke
 
 
 def check_private(state):
@@ -164,6 +165,7 @@ def main(archive):
             checkpoint_smoke.EXECUTABLE = launcher
             smoke.main(verify_escript=False)
             checkpoint_smoke.main()
+            team_smoke.main()
             interrupted_run(base)
         finally:
             os.chdir(previous_cwd)

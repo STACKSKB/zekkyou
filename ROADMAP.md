@@ -89,8 +89,10 @@ recovery, integration and review with the lead agent. Hosted CI is out of scope.
   commands, and authoritative owner-bound results;
   `ab97a1b` adds durable approval checkpoints, declared continuation snapshots
   and budget restoration; `ec5e3fa` fixes listener cleanup during supervised
-  shutdown and recovery after acceptor failure.
-- Zekkyou pins `ec5e3fa6c1416b2b977a946be798d53f0572e3a3`. These Alto changes
+  shutdown and recovery after acceptor failure; `da4d112` adds concurrent child
+  batches, inherited tool/depth authority, owned lifetime, shared accounting,
+  and bounded per-request context.
+- Zekkyou pins `da4d11217e427e28a6c06ad2cd0401a8718fad4a`. These Alto changes
   remain local on `zekkyou/durable-host` in `/home/three/code/alto`; use
   `ALTO_PATH` until that revision is published. The initial independent checkout
   in `.work/alto` has been superseded by this normal Alto checkout.
@@ -103,7 +105,7 @@ recovery, integration and review with the lead agent. Hosted CI is out of scope.
   Reconnection reopens the tunnel without restarting work.
 - Alto now supplies resident summaries and bounded saved transcript snapshots;
   Zekkyou retains application presentation and transport policy.
-- Validation: 42 service/client/transport tests and 13 terminal tests, including
+- Validation: 47 service/client/transport tests and 13 terminal tests, including
   a real native headless terminal driving a resident task across detach/reconnect.
   Two clients recover identical conversations and follow-up messages; saved
   conversation survives service restart. The standalone service smoke check
@@ -141,9 +143,25 @@ recovery, integration and review with the lead agent. Hosted CI is out of scope.
   unit was installed or enabled. Remote-host qualification remains outstanding.
   Custom loops must declare serializable continuations; arbitrary live state and
   independently suspended child runs are not supported by this checkpoint path.
-- Next implementation: bounded subagent/mailbox policy and isolated workspaces,
+- Milestone 5 is partially implemented: named worker profiles let the lead plan
+  independent assignments, select configured worker models, run bounded parallel
+  children and integrate their ordered results through Alto's default tool loop.
+  Plans cannot introduce providers/tools/prompts. Workers have separate prompts,
+  explicit tool subsets, inherited depth limits and shared execution budgets.
+  Cancelling or killing the parent cancels children; unknown outcomes and
+  descendant token usage propagate to the parent.
+- Team tests cover named-profile selection, invalid whole-plan rejection,
+  follow-ups with prior history and approval during integration. Three fresh VMs
+  verify completed worker results and consumed budgets survive the lead's
+  checkpoint, with no worker replay and accurate final usage. The runnable team
+  example assigns inspection to workers and reserves file edits for the lead.
+- Milestone 5 still needs durable addressed mailboxes, isolated coding workspaces
+  and child lifecycle/recovery policy. Workers currently share the configured
+  workspace; they are not independent durable queue tasks. This does not yet
+  satisfy the full concurrent coding-workspace gate.
+- Next implementation: durable mailboxes, child lifecycle and isolated workspaces,
   extending shared Alto contracts where needed. Remote qualification follows
   when a host is available.
 - Recovery now restores queued work and explicitly approved checkpoints; uncertain
-  dispatched effects remain parked for operator reconciliation. Concurrent agent
+  dispatched effects remain parked for operator reconciliation. Durable agent
   coordination, memory/skills and messaging adapters remain pending.

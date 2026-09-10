@@ -9,7 +9,7 @@ Development is in progress; this is not yet the unattended-operation release.
 
 ## Development
 
-The dependency pins Alto commit `ec5e3fa6c1416b2b977a946be798d53f0572e3a3`,
+The dependency pins Alto commit `da4d11217e427e28a6c06ad2cd0401a8718fad4a`,
 which adds durable replay, owner-bound runs and delayed queue scheduling on top
 of the clean public v0.0.1 release. That revision is currently **local and
 unpublished** on `zekkyou/durable-host`. Until it is published, set `ALTO_PATH`
@@ -33,7 +33,8 @@ and fenced rescheduling), `262bd13` (fresh-VM replay without unsafe term decodin
 `8ecceaf` (resident summaries and bounded saved conversations),
 `711aee9` (fenced cancellation/recovery and trusted application commands),
 `ab97a1b` (durable approval checkpoints and exact continuations),
-`ec5e3fa` (socket listener cleanup during supervised shutdown).
+`ec5e3fa` (socket listener cleanup during supervised shutdown),
+`da4d112` (bounded concurrent children, inherited authority and shared accounting).
 Zekkyou now composes those primitives into bounded durable tasks with delayed
 admission, cancellation, and explicit operator recovery. See [task commands](docs/tasks.md).
 Durable tool approvals use Alto's explicit checkpoint contract.
@@ -46,6 +47,12 @@ For an installation that includes its own Erlang/Elixir runtime, build the
 bundled service release with `MIX_ENV=prod mix release`. The archive includes
 the CLI, examples and systemd unit. See the [installation guide](deploy/README.md)
 for build qualification, configuration, restart and upgrade instructions.
+
+Named [worker teams](docs/teams.md) can now plan bounded parallel assignments,
+select configured worker models, and integrate results in the lead. The
+`examples/team.exs` profile gives workers inspection tools and checkpoints the
+lead's proposed file writes. Isolated worker workspaces and mailboxes remain
+roadmap work.
 
 ## Run a resident service
 
