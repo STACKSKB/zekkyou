@@ -114,6 +114,26 @@ an unrecorded run does not create child sessions. Session storage remains best
 effort, and a separate conversation does not authorize child recovery or reset
 the shared execution budget.
 
+`Zekkyou.Team.loop(workers: workers, journal: MyChildJournal)` enables Alto's
+optional durable child journal. Supply a supervised `Alto.OperationLog` server;
+a stable registered name lets checkpoint configuration match after restart.
+Alto records dispatch before each worker starts and saves each exact bounded
+child summary before returning it to the lead. Results and parent identity
+links survive even if the lead cannot collect the reply. The default has no
+child journal.
+
+The lead's `subagents_started` and completion events expose the journal binding.
+Trusted host code can reconnect with `Alto.Subagents.Journal.restore/2` and read
+ordered results with `join/1`. Results stay retained until that host durably
+saves its consuming continuation, acknowledges the viewed revision with
+`acknowledge/3`, then explicitly calls `retire/2`. Zekkyou does not yet automate
+that acknowledgement/retirement or reconstruct an interrupted parent batch.
+A dispatched worker without a saved result remains uncertain and cannot be
+silently rerun. Journal limits can reject retention; Alto preserves uncertainty
+and reports persistence failure rather than inventing a successful join. Exact
+result decoding loads Alto's standard vocabulary; additional result atoms
+require their trusted defining modules to be loaded.
+
 Workers share the configured workspace unless the team receives an optional
 [workspace manager](workspaces.md). The manager gives each child an independent
 Git checkout and captures a frozen patch without changing the source. The
@@ -131,5 +151,5 @@ qualified by the local deterministic tests.
 `python3 -B scripts/team_smoke.py` (after `mix escript.build`) verifies the
 complete team/approval flow across three fresh service VMs, including final
 descendant usage, a shared five-request budget, and unchanged separate child
-histories and transcripts across restarts. The release qualification
+histories, transcripts and retained child journals across restarts. The release qualification
 script runs this same scenario against its extracted bundled runtime.

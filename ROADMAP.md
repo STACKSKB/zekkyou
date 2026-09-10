@@ -102,7 +102,11 @@ recovery, integration and review with the lead agent. Hosted CI is out of scope.
   durable parent/identity links in histories and results; `f56da63` adds optional
   durable shared count budgets with fenced retained-state updates, account
   generations, nonincreasing caps and explicit retirement.
-- Zekkyou pins `f56da63fdb2503d760bb26665d296a17d74a12f5`. These Alto changes
+- Alto child journals (`1aa4ed3`) now record dispatch before execution and retain
+  exact bounded results from each worker before parent collection. Ordered joins, generation
+  fencing, explicit acknowledgement/retirement and conservative uncertain dispatch
+  records are implemented. Zekkyou teams can opt in with a trusted journal server.
+- Zekkyou pins `1aa4ed366bbcc248d60aff65b207600a1079f6ed`. These Alto changes
   remain local on `zekkyou/durable-host` in `/home/three/code/alto`; use
   `ALTO_PATH` until that revision is published. The initial independent checkout
   in `.work/alto` has been superseded by this normal Alto checkout.
@@ -210,9 +214,13 @@ recovery, integration and review with the lead agent. Hosted CI is out of scope.
   existing behavior. Automatic per-tree account lifecycle and coordinated active
   time across independently suspended children still need dispatch/join ownership.
 - Next implementation: independent child lifecycle/recovery,
-  including shared active-time accounting, child dispatch records and recoverable
-  parent joins in Alto. Remote qualification follows
+  including shared active-time accounting and exact pending-parent continuations
+  consuming the retained child journals in Alto. Dispatch/result records and
+  explicit join acknowledgement are implemented; automatic recovery and journal/
+  budget retirement remain pending. Remote qualification follows
   when a host is available.
 - Recovery now restores queued work and explicitly approved checkpoints; uncertain
   dispatched effects remain parked for operator reconciliation. Durable agent
   coordination, memory/skills and messaging adapters remain pending.
+- Development paused at the user's request after completing the child-journal
+  step. Remaining roadmap items are recorded above and have not been started.

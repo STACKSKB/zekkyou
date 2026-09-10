@@ -95,10 +95,13 @@ mailbox? = System.get_env("ZEKKYOU_TEAM_MAILBOX") == "1"
 mailbox_tools = if mailbox?, do: [Zekkyou.Tools.Mailbox], else: []
 workers = %{"inspect" => [provider: {TeamSmoke.Provider, worker: true},
                           tools: mailbox_tools, max_steps: if(mailbox?, do: 2, else: 1)]}
+{:ok, _journal} = Alto.OperationLog.start_link(
+  id: "children", name: TeamSmoke.Journal,
+  dir: Path.join(System.fetch_env!("ZEKKYOU_STATE_DIR"), "operations"))
 profile = Alto.Config.new(
   provider: TeamSmoke.Provider,
   system_prompt: Zekkyou.Team.instructions(workers, 2),
-  loop: Zekkyou.Team.loop(workers: workers, max_children: 2, max_concurrency: 2, sessions: :separate),
+  loop: Zekkyou.Team.loop(workers: workers, max_children: 2, max_concurrency: 2, sessions: :separate, journal: TeamSmoke.Journal),
   tools: [TeamSmoke.Guarded] ++ mailbox_tools,
   approval: Alto.Approvals.Checkpoint,
   checkpoint_version: "team-smoke-v1",
@@ -135,6 +138,22 @@ def main(mailboxes=False):
             return [json.loads(line) for line in
                     (base / "state/queues/team-messages.jsonl").read_text().splitlines()]
 
+        def child_journal(parent):
+            records = [json.loads(line) for line in
+                       (base / "state/operations/children.jsonl").read_text().splitlines()]
+            packets = [r["checkpoint"] for r in records
+                       if r["t"] in ("checkpoint", "checkpoint_update")
+                       and r["checkpoint"].get("kind") == "alto_subagent_batch"]
+            assert packets, records
+            packet = packets[-1]
+            assert packet["metadata"]["parent_session_id"] == parent, packet
+            assert packet["ids"] == ["a", "b"], packet
+            assert [child["id"] for child in packet["children"]] == ["a", "b"], packet
+            assert all(child["state"] == "completed" and child["result"]
+                       for child in packet["children"]), packet
+            assert packet["join"] is None, packet
+            return packet
+
         def child_sessions(parent):
             summaries = service.command(environment, socket_path, "status")[-1]["sessions"]
             children = [s for s in summaries if s["parent_session_id"] == parent]
@@ -159,6 +178,7 @@ def main(mailboxes=False):
             assert (workspace / "workers").read_text() == worker_calls
             assert waiting["usage"]["total_tokens"] == waiting_tokens, waiting
             saved_children = child_sessions(waiting["session_id"])
+            saved_journal = child_journal(waiting["session_id"])
             if mailboxes:
                 assert [r["type"] for r in mailbox_records()] == ["put", "put"]
                 root = waiting["agent_identity"]["root_run_id"]
@@ -182,6 +202,7 @@ def main(mailboxes=False):
             assert recovered["revision"] == waiting["revision"], recovered
             assert recovered["approval"] == waiting["approval"], recovered
             assert child_sessions(recovered["session_id"]) == saved_children
+            assert child_journal(recovered["session_id"]) == saved_journal
             if mailboxes:
                 assert service.command(environment, socket_path, "mailbox", root)[-1]["messages"] == pending
             service.command(environment, socket_path, "task-decide", "team", "approve",
@@ -206,6 +227,7 @@ def main(mailboxes=False):
             replay = service.task(environment, socket_path, "team")
             assert replay["status"] == "completed"
             assert child_sessions(replay["session_id"]) == saved_children
+            assert child_journal(replay["session_id"]) == saved_journal
             assert replay["usage"]["total_tokens"] == completed_tokens, replay
             assert (workspace / "workers").read_text() == worker_calls
             assert (workspace / "integrated").read_text() == "original"
@@ -217,7 +239,7 @@ def main(mailboxes=False):
             service.stop(process)
 
     print("PASS: " + ("scoped durable team mailboxes, retained-state compaction, restart, acknowledgement, stable identity" if mailboxes
-                      else "named workers, separate child sessions, shared budget/usage, exact integration approval, fresh-VM recovery"))
+                      else "named workers, separate child sessions, durable child journals, shared budget/usage, exact integration approval, fresh-VM recovery"))
 
 
 if __name__ == "__main__":

@@ -7,6 +7,7 @@ defmodule Zekkyou.Team do
   default; `sessions: :separate` selects Alto's independent child transcripts.
   Optional durable mailboxes use host-derived execution identities.
   An optional Alto workspace manager assigns independent coding checkouts.
+  An optional Alto child journal retains dispatch and join results.
   Independent child checkpoints remain pending.
   """
 
@@ -16,7 +17,14 @@ defmodule Zekkyou.Team do
   @spec loop(keyword()) :: Alto.Loop.Spec.t()
   def loop(opts \\ []) do
     opts =
-      Keyword.validate!(opts, [:workers, :max_children, :max_concurrency, :workspaces, :sessions])
+      Keyword.validate!(opts, [
+        :workers,
+        :max_children,
+        :max_concurrency,
+        :workspaces,
+        :sessions,
+        :journal
+      ])
 
     max_children = Keyword.get(opts, :max_children, 4)
     max_concurrency = Keyword.get(opts, :max_concurrency, min(2, max_children))
@@ -27,6 +35,7 @@ defmodule Zekkyou.Team do
         max_children: max_children,
         max_concurrency: max_concurrency,
         sessions: Keyword.get(opts, :sessions, :shared),
+        journal: Keyword.get(opts, :journal),
         workspaces: Keyword.get(opts, :workspaces)
       )
 

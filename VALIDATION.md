@@ -251,3 +251,52 @@ cleanup also pass against this bundle.
   Independent child lifecycle/recovery,
   memory/skills, messaging adapters and
   live remote qualification remain pending. No changes were pushed or published.
+
+## Child journals and retained joins — 2026-09-10
+
+Alto commit `1aa4ed3` adds optional durable child journals on the normal
+`zekkyou/durable-host` checkout. Dispatch is recorded before execution, and
+workers retain their exact bounded summaries before returning to the parent.
+Completed results remain protected from ledger eviction until explicit join
+acknowledgement and retirement. Zekkyou's team policy passes through the optional
+trusted journal server; default profiles keep their existing behavior.
+
+The full Alto suite passes **780 tests**. After a cold-observer decoding fix,
+all **16 focused journal and runner tests** pass again. They cover concurrent
+admission, concurrent completion of 64 children without exhausting attempt
+history, ordered results, ledger restart, generation/result conflicts, record
+bounds, nonportable values, retention pressure, stale acknowledgement and
+interrupted retirement. Runner tests suspend the parent before child completion
+and prove the worker's result is already durable without parent collection.
+Forced child shutdown preserves cancellation while retaining an unknown verdict
+and unresolved dispatch evidence. Runs without session logging still report
+journal persistence failures.
+
+Three independent Alto VMs execute two real fixture children, recover exact
+native outputs and input order, refuse redispatch, retain a separate uncertain
+dispatch, acknowledge/retire the completed batch, and verify retirement without
+additional child calls. An initial final-observer check exposed missing loaded
+result atoms; the journal now loads Alto's fixed runtime/usage vocabulary before
+safe decoding. The corrected observer also passes with compilation disabled.
+Stored data cannot select modules to load or create atoms. Additional custom
+result atoms require their trusted defining code to be loaded.
+
+Zekkyou passes **66 service tests** and **13 terminal tests** (seed 745605).
+Its team test compares the retained native child summary to the actual result.
+The terminal check uses the existing shared dependency directory; the initial
+invocation without that setting stopped before tests because dependencies were
+not found. Production compilation and formatting checks pass.
+
+The full relocated bundled-release check passes, including real execution,
+reconnect, scheduled work, exact approval continuation, team mailboxes,
+independent workspaces, reviewed patch integration and durable shared budgets.
+The team fixture now enables the child journal and compares its complete saved
+packet across three service VMs alongside unchanged child histories, outputs,
+provider-call counts and usage. Its retained join remains unacknowledged until
+an explicit host consumption protocol is supplied; task completion does not
+silently discard the journal.
+
+Automatic restoration of an interrupted parent batch, independently suspended
+children, coordinated active time and automatic journal/budget retirement are
+still pending. The user requested stopping after this current step; remaining
+roadmap items are deferred.

@@ -98,6 +98,11 @@ defmodule Zekkyou.TeamTest do
   test "plans through named worker and integrates child results", %{dir: dir} do
     pid = self()
 
+    journal =
+      start_supervised!(
+        {Alto.OperationLog, id: "children", name: nil, dir: Path.join(dir, "operations")}
+      )
+
     assert {:ok, result} =
              Alto.run("original task",
                loop:
@@ -105,7 +110,8 @@ defmodule Zekkyou.TeamTest do
                    workers: %{cheap: [provider: {CheapProvider, test_pid: pid}]},
                    max_children: 2,
                    max_concurrency: 1,
-                   sessions: :separate
+                   sessions: :separate,
+                   journal: journal
                  ),
                provider: {LeadProvider, test_pid: pid},
                system_prompt: Zekkyou.Team.instructions([:cheap], 2),
@@ -117,6 +123,14 @@ defmodule Zekkyou.TeamTest do
     assert result.persistence == :ok
     children = Enum.find(result.events, &(&1.type == :subagents_completed)).data.results
     [child] = children
+    binding = Enum.find(result.events, &(&1.type == :subagents_completed)).data.journal
+    assert {:ok, batch} = Alto.Subagents.Journal.restore(journal, binding)
+
+    assert {:ok, %{results: [{"worker-1", retained}], packet: %{"join" => nil}}} =
+             Alto.Subagents.Journal.join(batch)
+
+    assert Map.delete(retained, :persistence) == child
+    assert retained.persistence == :ok
     assert child.session_id != result.session_id
     assert {:ok, transcript} = Alto.Session.transcript(child.session_id, session_dir: dir)
     assert Enum.any?(transcript.messages, &(&1["content"] == "finding"))
