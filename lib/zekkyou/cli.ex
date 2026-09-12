@@ -29,6 +29,9 @@ defmodule Zekkyou.CLI do
   zekkyou workspace ID [--socket PATH]
   zekkyou workspace-patch ID [--cursor N] [--socket PATH]
   zekkyou workspace-discard ID --revision N --note TEXT [--socket PATH]
+  zekkyou team-batches [--cursor N] [--socket PATH]
+  zekkyou team-batch KEY [--socket PATH]
+  zekkyou team-result KEY CHILD --generation G --revision N [--cursor N] [--socket PATH]
 
   Serve owns execution. Closing status/watch clients does not stop agents.
   Configuration is trusted Elixir code. Use SSH socket forwarding for remote access.
@@ -56,7 +59,8 @@ defmodule Zekkyou.CLI do
           delay_ms: :integer,
           id: :string,
           revision: :integer,
-          note: :string
+          note: :string,
+          generation: :string
         ]
       )
 
@@ -161,6 +165,37 @@ defmodule Zekkyou.CLI do
        command_wire("workspaces.discard", %{"id" => id, "revision" => revision, "note" => note})}
     else
       {:error, :workspace_discard_requires_revision_and_note}
+    end
+  end
+
+  defp command(["team-batches"], opts),
+    do: {:ok, command_wire("children.list", %{"cursor" => Keyword.get(opts, :cursor, 0)})}
+
+  defp command(["team-batch", key], _opts),
+    do: {:ok, command_wire("children.get", %{"key" => key})}
+
+  defp command(["team-result", key, child], opts) do
+    generation = Keyword.get(opts, :generation)
+    revision = Keyword.get(opts, :revision)
+    cursor = Keyword.get(opts, :cursor, 0)
+
+    cond do
+      not (is_binary(generation) and String.trim(generation) != "") or
+          not (is_integer(revision) and revision > 0) ->
+        {:error, :team_result_requires_generation_and_revision}
+
+      not (is_integer(cursor) and cursor >= 0) ->
+        {:error, {:invalid_team_result, :cursor}}
+
+      true ->
+        {:ok,
+         command_wire("children.result", %{
+           "key" => key,
+           "child" => child,
+           "generation" => generation,
+           "revision" => revision,
+           "cursor" => cursor
+         })}
     end
   end
 

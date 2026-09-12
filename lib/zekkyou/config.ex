@@ -8,6 +8,7 @@ defmodule Zekkyou.Config do
     :profiles,
     max_retained_events: 1_000,
     runtime: Zekkyou.Runtime.Alto,
+    child_runs: [max_retained: 128, max_log_bytes: 64_000_000, max_batch_bytes: 1_000_000],
     workspaces: [max_retained: 128, max_log_bytes: 64_000_000],
     mailbox: [
       auto_compact: true,
@@ -34,6 +35,7 @@ defmodule Zekkyou.Config do
           profiles: map(),
           max_retained_events: pos_integer(),
           runtime: module(),
+          child_runs: keyword(),
           workspaces: keyword(),
           mailbox: keyword(),
           scheduling: keyword()
@@ -53,6 +55,7 @@ defmodule Zekkyou.Config do
           :runtime,
           :scheduling,
           :mailbox,
+          :child_runs,
           :workspaces
         ]
 
@@ -65,6 +68,7 @@ defmodule Zekkyou.Config do
     scheduling = scheduling_options(Keyword.get(opts, :scheduling, []))
     mailbox = mailbox_options(Keyword.get(opts, :mailbox, []))
     workspaces = workspace_options(Keyword.get(opts, :workspaces, []))
+    child_runs = child_run_options(Keyword.get(opts, :child_runs, []))
 
     unless is_atom(runtime) and Code.ensure_loaded?(runtime) and
              function_exported?(runtime, :children, 2),
@@ -92,10 +96,33 @@ defmodule Zekkyou.Config do
       profiles: profiles,
       max_retained_events: retention,
       runtime: runtime,
+      child_runs: child_runs,
       workspaces: workspaces,
       mailbox: mailbox,
       scheduling: scheduling
     }
+  end
+
+  defp child_run_options(options) do
+    defaults = [max_retained: 128, max_log_bytes: 64_000_000, max_batch_bytes: 1_000_000]
+
+    bounds = [
+      max_retained: 1..10_000,
+      max_log_bytes: 100_000..256_000_000,
+      max_batch_bytes: 64_000..8_000_000
+    ]
+
+    unless Keyword.keyword?(options) and Keyword.keys(options) -- Keyword.keys(defaults) == [],
+      do: raise(ArgumentError, "invalid child journal options")
+
+    settings = Keyword.merge(defaults, options)
+
+    Enum.each(bounds, fn {key, range} ->
+      unless is_integer(settings[key]) and settings[key] in range,
+        do: raise(ArgumentError, "invalid child journal #{key}")
+    end)
+
+    settings
   end
 
   defp workspace_options(options) do

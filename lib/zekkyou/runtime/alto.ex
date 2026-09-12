@@ -9,7 +9,11 @@ defmodule Zekkyou.Runtime.Alto do
     {stores, workers} = Zekkyou.Tasks.children(config, name)
 
     stores ++
-      [Zekkyou.Mailbox.child(config, name), Zekkyou.Workspaces.child(config, name)] ++
+      [
+        Zekkyou.Mailbox.child(config, name),
+        Zekkyou.Workspaces.child(config, name),
+        Zekkyou.ChildRuns.child(config, name)
+      ] ++
       [
         {Alto.FrontEnd.Registry,
          name: registry,
@@ -17,6 +21,7 @@ defmodule Zekkyou.Runtime.Alto do
          commands:
            Zekkyou.Tasks.commands(name)
            |> Map.merge(Zekkyou.Mailbox.commands(name))
+           |> Map.merge(Zekkyou.ChildRuns.commands(name))
            |> Map.merge(Zekkyou.Workspaces.commands(config, name)),
          max_active_runs: config.scheduling[:workers] + 2,
          cwd: config.workspace,

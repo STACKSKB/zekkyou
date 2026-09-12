@@ -126,6 +126,20 @@ child summary before returning it to the lead. Results and parent identity
 links survive even if the lead cannot collect the reply. The default has no
 child journal.
 
+The default resident runtime now supervises a journal at
+`operations/team-children.jsonl` within the private state directory. Opt in with
+`journal: Zekkyou.ChildRuns.ledger()`; a named service uses `ledger(service_name)`.
+The runnable team example enables this journal and separate child sessions.
+The `child_runs` service settings default to 128 retained batches, a 64 MB log
+and a 1 MB checkpoint limit per batch. A batch contains all its child results;
+the per-batch bound can be reached before Alto's individual result limit.
+Retention exhaustion refuses further writes rather than evicting unconsumed
+results. Inspection does not free capacity. Existing separately supervised
+journals remain supported and untouched; these commands inspect only the
+resident journal, not arbitrary configured stores.
+Finish pending approvals with their existing trusted profile before changing
+its journal or session settings; Alto binds checkpoints to that configuration.
+
 The lead's `subagents_started` and completion events expose the journal binding.
 Trusted host code can reconnect with `Alto.Subagents.Journal.restore/2` and read
 ordered results with `join/1`. Results stay retained until that host durably
@@ -135,8 +149,38 @@ that acknowledgement/retirement or reconstruct an interrupted parent batch.
 A dispatched worker without a saved result remains uncertain and cannot be
 silently rerun. Journal limits can reject retention; Alto preserves uncertainty
 and reports persistence failure rather than inventing a successful join. Exact
-result decoding loads Alto's standard vocabulary; additional result atoms
-require their trusted defining modules to be loaded.
+result decoding uses Alto's portable codec; result atoms require their trusted
+defining modules to be loaded in the consuming VM.
+
+The resident service exposes read-only inspection for its child journal through
+`team-batches`, `team-batch KEY`, and `team-result KEY CHILD --generation G
+--revision N [--cursor N]`. These commands list retained batches, inspect a
+batch's child states, or export a bounded base64 portable-term result in chunks.
+The generation and revision are required on every result page so an operator
+cannot accidentally read from a replaced batch or stale view. Local operators
+may read and export these records; the commands never acknowledge, retire, or
+resume a batch. A completed child means only that an exact outcome was retained;
+that outcome may be an error or `unknown`. A dispatched child without a retained
+outcome remains uncertain and must not be silently rerun. A batch's `active`
+state describes retained, unretired storage; it does not prove a worker is alive.
+
+Concatenate result `chunk` strings in cursor order and verify `bytes` and
+`sha256` against that complete ASCII base64 string. The encoding is Alto's
+portable-term representation, not JSON; trusted Elixir tooling can decode it
+with `Alto.Persistence.Codec.decode/1`. Export itself does not decode terms or
+load custom modules. This preserves results even when their custom atom
+vocabulary is unavailable in the observing VM. If another child completes
+between pages, the old revision is refused: inspect the batch again and restart
+the export. List pagination is a bounded view of the current sorted keys, not
+a frozen snapshot; rescan while batches are being added or retired.
+
+`python3 -B scripts/child_recovery_smoke.py` checks an abrupt process-group kill
+during delegation for both Serial and Stepped. One child has a retained result,
+one has performed an effect without returning, and one has not started. Two
+fresh observing service VMs recover identical paged results and journal bytes,
+leave the interrupted parent for operator review, and do not dispatch any child.
+This verifies recovery of evidence; automatic execution continuation remains
+the next shared-runtime step.
 
 Workers share the configured workspace unless the team receives an optional
 [workspace manager](workspaces.md). The manager gives each child an independent

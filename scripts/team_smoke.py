@@ -95,9 +95,6 @@ mailbox? = System.get_env("ZEKKYOU_TEAM_MAILBOX") == "1"
 mailbox_tools = if mailbox?, do: [Zekkyou.Tools.Mailbox], else: []
 workers = %{"inspect" => [provider: {TeamSmoke.Provider, worker: true},
                           tools: mailbox_tools, max_steps: if(mailbox?, do: 2, else: 1)]}
-{:ok, _journal} = Alto.OperationLog.start_link(
-  id: "children", name: TeamSmoke.Journal,
-  dir: Path.join(System.fetch_env!("ZEKKYOU_STATE_DIR"), "operations"))
 runner = case System.get_env("ZEKKYOU_SMOKE_RUNNER", "serial") do
   "serial" -> Alto.Runner.Serial
   "stepped" -> Alto.Runner.Stepped
@@ -107,7 +104,7 @@ profile = Alto.Config.new(
   runner_options: [],
   provider: TeamSmoke.Provider,
   system_prompt: Zekkyou.Team.instructions(workers, 2),
-  loop: Zekkyou.Team.loop(workers: workers, max_children: 2, max_concurrency: 2, sessions: :separate, journal: TeamSmoke.Journal),
+  loop: Zekkyou.Team.loop(workers: workers, max_children: 2, max_concurrency: 2, sessions: :separate, journal: Zekkyou.ChildRuns.ledger()),
   tools: [TeamSmoke.Guarded] ++ mailbox_tools,
   approval: Alto.Approvals.Checkpoint,
   checkpoint_version: "team-smoke-v1",
@@ -147,7 +144,7 @@ def main(mailboxes=False, runner="serial"):
 
         def child_journal(parent):
             records = [json.loads(line) for line in
-                       (base / "state/operations/children.jsonl").read_text().splitlines()]
+                       (base / "state/operations/team-children.jsonl").read_text().splitlines()]
             packets = [r["checkpoint"] for r in records
                        if r["t"] in ("checkpoint", "checkpoint_update")
                        and r["checkpoint"].get("kind") == "alto_subagent_batch"]
@@ -159,6 +156,16 @@ def main(mailboxes=False, runner="serial"):
             assert all(child["state"] == "completed" and child["result"]
                        for child in packet["children"]), packet
             assert packet["join"] is None, packet
+            batches = service.command(environment, socket_path, "team-batches")[-1]["batches"]
+            batch, = [b for b in batches if b["metadata"]["parent_session_id"] == parent]
+            detail = service.command(environment, socket_path, "team-batch", batch["key"])[-1]
+            assert detail["generation"] == packet["generation"] and not detail["joined"], detail
+            assert detail["counts"] == {"completed": 2}, detail
+            for child in packet["children"]:
+                exported = service.command(environment, socket_path, "team-result", batch["key"],
+                                           child["id"], "--generation", detail["generation"],
+                                           "--revision", str(detail["revision"]))[-1]
+                assert exported["chunk"] == child["result"] and exported["next_cursor"] is None
             return packet
 
         def child_sessions(parent):

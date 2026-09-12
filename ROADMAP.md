@@ -214,7 +214,13 @@ recovery, integration and review with the lead agent. Hosted CI is out of scope.
   counters instead of cloning a snapshot. Default task budgets retain their
   existing behavior. Automatic per-tree account lifecycle and coordinated active
   time across independently suspended children still need dispatch/join ownership.
-- Next implementation: independent child lifecycle/recovery,
+- Independent child lifecycle/recovery is the active milestone again as of
+  2026-09-12. The resident runtime now supervises an opt-in Alto child journal;
+  operators can list batch states and export exact results using generation and
+  revision fences. Abrupt-crash checks cover completed, unresolved dispatched,
+  and unstarted children under both shipped runners across fresh service VMs.
+  Inspection never releases dispatch permission or acknowledges consumption.
+- Next shared-runtime implementation: independent child lifecycle/recovery,
   including shared active-time accounting and exact pending-parent continuations
   consuming the retained child journals in Alto. Dispatch/result records and
   explicit join acknowledgement are implemented; automatic recovery and journal/
@@ -226,4 +232,6 @@ recovery, integration and review with the lead agent. Hosted CI is out of scope.
 - The child-journal step was completed before pausing broader roadmap work.
   A subsequent requested migration adopts Alto's published runner refactor,
   manager-owned workspace source/digest contracts, and explicit old-state upgrade
-  handling. Independent child recovery and later milestones remain deferred.
+  handling. Work resumed with resident child evidence recovery; automatic parent
+  continuation, independently suspended children and later milestones remain
+  unfinished.

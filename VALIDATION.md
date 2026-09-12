@@ -333,3 +333,39 @@ test suite was not rerun here.
 A delegated final review found no must-fix issue. Upgrade compatibility limits
 and reconciliation steps are documented in [the runner guide](docs/runners.md).
 This migration does not implement the deferred roadmap items above.
+
+## Resident child evidence recovery — 2026-09-12
+
+Work resumed on milestone 5 using the same published Alto pin. Zekkyou now
+supervises an opt-in child journal and offers bounded operator inspection and
+exact result export. All lifecycle storage and validation use Alto's existing
+OperationLog and Journal APIs; no Alto source was changed for this step.
+
+- **79 service tests** pass (seed 846613), including six new child recovery
+  tests. They cover partial batches across journal restart, exact exported
+  bytes and decoded result equality, stale generations/revisions, concurrent
+  completion between export pages, list pagination and retention exhaustion.
+  Completed but unconsumed batches remain protected from eviction, and reads
+  leave the complete retained snapshot unchanged.
+- **13 terminal tests** pass (seed 643558). Service compilation with warnings
+  as errors, production compilation, release assembly, formatting and diff
+  whitespace checks pass. A restricted build initially could not open Mix's
+  local socket; the authorized build and checks completed successfully.
+- The new crash qualification passes for **Serial and Stepped**. A real child
+  finishes with a result large enough to require multiple export pages; a
+  second child writes an external effect and is killed before returning; a
+  third remains undispatched. Two fresh service VMs retain exactly the same
+  journal bytes and exported result, park the containing task for operator
+  review, and do not repeat the plan or either child effect.
+- The complete relocated bundled-release suite passes, including those crash
+  scenarios. Existing team checks now use the supervised resident journal and
+  inspect/export both child results through the actual CLI across approval
+  suspension and two restarts. Cross-runner checkpoints, mailboxes, workspaces,
+  reviewed patch integration, shared budgets and service shutdown/recovery
+  regressions also pass.
+
+The commands do not acknowledge joins, retire batches, or resume execution.
+Automatic parent continuations, independent child checkpoints and coordinated
+active-time accounting remain unfinished. Existing custom journal stores are
+not rewritten or adopted automatically. See [team recovery](docs/teams.md) for
+the configuration, retention and export contracts.
