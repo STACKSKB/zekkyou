@@ -9,20 +9,22 @@ Development is in progress; this is not yet the unattended-operation release.
 
 ## Development
 
-The dependency and lockfiles pin published Alto commit
-`3bcec285537c5ab44d301a43737fc9d0b8351a7a`. This includes the durable-host
-mechanisms and configurable Serial/Stepped runners. A separate Alto checkout is
-optional; normal builds fetch the published Git revision.
+The dependency and lockfiles pin Alto commit
+`f71d574a46e33011be288b2f38ee6e03231f4680`, which adds exact parent-batch
+continuations to the durable-host mechanisms and Serial/Stepped runners.
+This commit is currently local and unpublished. Until publication, build with
+an Alto checkout at that commit (locally, `codex/parent-continuations`):
 
 ```sh
+export ALTO_PATH=/absolute/path/to/alto
 mix deps.get
 mix test
 mix escript.build
 python3 -B scripts/smoke.py
 ```
 
-For local Alto development, set `ALTO_PATH=/path/to/alto` explicitly. Validate
-against the pinned release before upgrading persisted state. See
+The override also applies to the optional terminal package. Validate against
+the pinned commit before upgrading persisted state. See
 [runner selection and upgrade compatibility](docs/runners.md), particularly
 for suspended approvals and retained worker workspaces.
 
@@ -55,7 +57,9 @@ restarts. Optional [isolated worker workspaces](docs/workspaces.md) capture
 independent patches and retain interrupted resources for review. The
 `examples/coding-team.exs` profile permits bounded worker edits in isolated
 checkouts, then has the lead review and request durable approval for patch
-application. Independent child recovery remains roadmap work.
+application. The team profile can also recover a completed child batch from
+the lead's exact saved continuation through `task-recover`, without repeating
+the plan or workers. Independent child recovery remains roadmap work.
 
 ## Run a resident service
 
@@ -88,8 +92,9 @@ runtime. Submit it with `./zekkyou start inspect '{"path":"."}'`.
 
 `start` returns the run and session IDs. `watch` displays live notifications;
 `history` pages through persisted session events. Closing a client leaves the
-service running. The durable `schedule` commands park interrupted attempts for operator review;
-current Alto sessions resume only from completed transcript snapshots.
+service running. The durable `schedule` commands park interrupted attempts for
+operator review. Explicit approval checkpoints and opted-in parent continuations
+can restore suspended execution; ordinary follow-ups use completed transcripts.
 
 State defaults to `$XDG_STATE_HOME/zekkyou` or `~/.local/state/zekkyou`.
 Its socket and state are private to the service account. Use `--socket PATH`

@@ -12,9 +12,12 @@ The optional terminal client is packaged separately. It is not included here.
 
 ## Build and qualify
 
-From the Zekkyou checkout (the lockfiles fetch the published Alto revision):
+From the Zekkyou checkout, use an Alto checkout at the pinned commit
+`f71d574a46e33011be288b2f38ee6e03231f4680`. That commit is currently local and
+unpublished, so a fresh build needs the explicit path override:
 
 ```sh
+export ALTO_PATH=/absolute/path/to/alto
 MIX_ENV=prod mix deps.get
 MIX_ENV=prod mix compile --warnings-as-errors
 MIX_ENV=prod mix release --overwrite

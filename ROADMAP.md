@@ -106,10 +106,11 @@ recovery, integration and review with the lead agent. Hosted CI is out of scope.
   exact bounded results from each worker before parent collection. Ordered joins, generation
   fencing, explicit acknowledgement/retirement and conservative uncertain dispatch
   records are implemented. Zekkyou teams can opt in with a trusted journal server.
-- Zekkyou now pins published Alto `3bcec285537c5ab44d301a43737fc9d0b8351a7a`,
+- Zekkyou migrated to published Alto `3bcec285537c5ab44d301a43737fc9d0b8351a7a`,
   including the durable-host additions and independent Serial/Stepped runners.
-  Both service and terminal dependencies/lockfiles work without `ALTO_PATH`;
-  it remains an optional development override. Runtime policies stay in Zekkyou.
+  The current pin is local, unpublished `f71d574a46e33011be288b2f38ee6e03231f4680`
+  with parent continuations; fresh builds need `ALTO_PATH` until publication.
+  Runtime policies stay in Zekkyou.
   Earlier `.work/alto` and durable-host checkouts are historical development state.
 - TUI implementation: optional `packages/zekkyou_tui` client reuses Alto's
   layout, selects resident/stored sessions, sends follow-ups, displays saved
@@ -205,33 +206,40 @@ recovery, integration and review with the lead agent. Hosted CI is out of scope.
 - Separate child session storage is available through the team's optional
   `sessions: :separate` setting. Alto owns each child transcript and preserves
   ancestry links; shared storage remains the default. Completed conversations
-  can be inspected independently, while dispatch and joins remain owned by the
-  live parent. Fresh-VM checks recover the parent and child histories exactly.
+  can be inspected independently. Retained journals and opted-in parent
+  continuations now preserve dispatch and joins across parent death. Fresh-VM
+  checks recover the parent and child histories exactly.
 - Milestone 5 still needs independent child lifecycle/recovery. A workspace resource is not an independently resumable child job. The full integration
   gate remains outstanding.
 - Alto's durable effect/model-count accounts are implemented. Trusted Zekkyou
   profiles can supply an account; restored budgets reconnect to its current
-  counters instead of cloning a snapshot. Default task budgets retain their
-  existing behavior. Automatic per-tree account lifecycle and coordinated active
-  time across independently suspended children still need dispatch/join ownership.
+  counters instead of cloning a snapshot. Continuation-enabled durable tasks
+  now create or reuse a per-task account. Default task budgets retain their
+  existing behavior. Coordinated retirement and active time across independently
+  suspended children remain pending.
 - Independent child lifecycle/recovery is the active milestone again as of
   2026-09-12. The resident runtime now supervises an opt-in Alto child journal;
   operators can list batch states and export exact results using generation and
   revision fences. Abrupt-crash checks cover completed, unresolved dispatched,
   and unstarted children under both shipped runners across fresh service VMs.
   Inspection never releases dispatch permission or acknowledges consumption.
-- Next shared-runtime implementation: independent child lifecycle/recovery,
-  including shared active-time accounting and exact pending-parent continuations
-  consuming the retained child journals in Alto. Dispatch/result records and
-  explicit join acknowledgement are implemented; automatic recovery and journal/
-  budget retirement remain pending. Remote qualification follows
-  when a host is available.
+- Exact parent-batch continuation is implemented in Alto `f71d574`: a retained
+  pending frame precedes child dispatch, a ready frame precedes join
+  acknowledgement, and a single-use claim precedes downstream effects. Zekkyou
+  supplies persistent stores, per-task count accounts and explicit revision-fenced
+  `task-recover` policy. Three fresh service VMs qualify one plan, one child
+  execution and one integration under both shipped runners. Incomplete batches
+  remain parked; generic retry cannot bypass the saved continuation.
+- Next shared-runtime implementation: independently suspended child checkpoints,
+  coordinated active-time accounting and explicit journal/continuation/budget
+  retirement. Automatic recovery policy remains pending. Remote qualification
+  follows when a host is available.
 - Recovery now restores queued work and explicitly approved checkpoints; uncertain
   dispatched effects remain parked for operator reconciliation. Durable agent
   coordination, memory/skills and messaging adapters remain pending.
 - The child-journal step was completed before pausing broader roadmap work.
   A subsequent requested migration adopts Alto's published runner refactor,
   manager-owned workspace source/digest contracts, and explicit old-state upgrade
-  handling. Work resumed with resident child evidence recovery; automatic parent
-  continuation, independently suspended children and later milestones remain
+  handling. Work resumed with resident child evidence recovery and exact parent
+  continuations. Independently suspended children and later milestones remain
   unfinished.

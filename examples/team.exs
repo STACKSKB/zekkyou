@@ -32,6 +32,7 @@ Zekkyou.Config.new(
     "team" =>
       Alto.Config.new(
         provider: provider.(System.fetch_env!("ZEKKYOU_MODEL")),
+        continuation_store: Zekkyou.ParentRuns.ledger(),
         system_prompt: Zekkyou.Team.instructions(workers, 4),
         loop:
           Zekkyou.Team.loop(
@@ -43,7 +44,7 @@ Zekkyou.Config.new(
           ),
         tools: inspection ++ [Alto.Tools.WriteFile],
         approval: Alto.Approvals.Checkpoint,
-        checkpoint_version: "team-v1",
+        checkpoint_version: "team-v2-parent-recovery",
         max_steps: 16,
         max_model_requests: 48,
         max_effects: 200,

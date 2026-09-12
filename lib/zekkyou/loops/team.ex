@@ -51,6 +51,9 @@ defmodule Zekkyou.Loops.Team do
     do: Transition.error(state, {:unexpected_team_event, event.type, state.phase})
 
   @impl true
+  def dump_checkpoint(%{phase: :children, task: task, inner: nil}, _spec),
+    do: {:ok, %{phase: :children, task: task, inner: nil}}
+
   def dump_checkpoint(%{phase: :integrating, task: task, inner: inner}, spec) do
     with {:ok, encoded} <- Default.dump_checkpoint(inner, spec),
          do: {:ok, %{phase: :integrating, task: task, inner: encoded}}
@@ -59,6 +62,10 @@ defmodule Zekkyou.Loops.Team do
   def dump_checkpoint(_state, _spec), do: {:error, :team_checkpoint_unavailable}
 
   @impl true
+  def load_checkpoint(%{phase: :children, task: task, inner: nil} = checkpoint, _spec)
+      when map_size(checkpoint) == 3,
+      do: {:ok, %{phase: :children, task: task, inner: nil}}
+
   def load_checkpoint(%{phase: :integrating, task: task, inner: encoded} = checkpoint, spec)
       when map_size(checkpoint) == 3 do
     with {:ok, inner} <- Default.load_checkpoint(encoded, spec),

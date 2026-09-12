@@ -12,6 +12,7 @@ zekkyou task ID
 zekkyou task-cancel ID
 zekkyou task-reconcile ID committed|failed|retry --revision N --note TEXT
 zekkyou task-decide ID approve|deny --revision N
+zekkyou task-recover ID KEY --revision TASK_REV --generation G --continuation-revision CELL_REV
 ```
 
 Scheduling is bounded in the trusted service configuration. For example:
@@ -68,15 +69,44 @@ are limited to 2,048 characters; the authoritative outcome class and task state
 remain separate fields.
 
 Unknown work is parked as `requires_operator` after a restart, timeout, or
-other uncertain boundary. Retry is an explicit operator decision: inspect the
-task revision with `task ID`, then reconcile it with a nonempty explanatory
-note. `retry` restores the retained recovery payload to the durable queue;
-there is no automatic retry after an unknown outcome. `committed` and `failed`
-close the operation without another dispatch. If the queue is full, a recorded
-retry grant remains `awaiting_admission` and enters once capacity is available,
-including after restart. It can be cancelled while waiting. Cancellation is
-recorded in the ledger before removing a queued entry, so a racing worker
-cannot dispatch a successfully cancelled task.
+other uncertain boundary. For tasks without a parent continuation, retry is an
+explicit operator decision: inspect the task revision with `task ID`, then
+reconcile it with a nonempty explanatory note. `retry` restores the retained
+recovery payload to the durable queue; there is no automatic retry after an
+unknown outcome. `committed` and `failed` close the operation without another
+dispatch. If the queue is full, a recorded retry grant remains
+`awaiting_admission` and enters once capacity is available, including after
+restart. It can be cancelled while waiting. Cancellation is recorded in the
+ledger before removing a queued entry, so a racing worker cannot dispatch a
+successfully cancelled task.
+
+A scheduled profile can opt into a retained parent continuation with a trusted
+`continuation_store: Zekkyou.ParentRuns.ledger()`, a durable child journal, and
+checkpoint callbacks that support the child boundary. Zekkyou opens a per-task
+durable shared budget account unless the profile supplies one. After a parent
+process is lost, `task ID` exposes `parent_continuation` with its `identity`
+(`key` and `generation`), `revision`, `phase`, and `session_id`. Inspect that
+snapshot and the child batch before recovering. For example:
+
+```text
+zekkyou task-recover TASK_ID CELL_KEY --revision TASK_REV --generation CELL_GENERATION --continuation-revision CELL_REV
+```
+
+This command accepts only a parked task and the exact current task and cell
+revisions. Every child must have a retained result, or the parent frame must
+already be ready. It readmits the saved parent frame to integrate results and
+continue; it does not rerun the model's plan or dispatch a child again. A
+missing, pending-child, claimed, or mismatched continuation is refused. A task
+with a parent continuation cannot use generic `task-reconcile ... retry` as a
+substitute. The parent frame is claimed once before downstream effects, so an
+uncertain later effect still needs ordinary operator review.
+
+Recovery does not approve a tool. Suspended tool approvals continue to use
+`task-decide` and their own saved decision. Parent continuations carry an
+absolute expiry; time spent stopped counts against the run deadline. The
+acknowledged child journal, claimed parent cell, and budget account remain
+retained after recovery. Automatic retirement and independent child suspension
+are future work.
 
 The `scheduled/` profile prefix is reserved internally. Retention is bounded:
 completed task identities can eventually be evicted; an idempotency key is not

@@ -21,6 +21,7 @@ defmodule Zekkyou.CLI do
   zekkyou task-cancel ID [--socket PATH]
   zekkyou task-reconcile ID committed|failed|retry --revision N --note TEXT [--socket PATH]
   zekkyou task-decide ID approve|deny --revision N [--socket PATH]
+  zekkyou task-recover ID KEY --revision TASK_REV --generation G --continuation-revision CELL_REV [--socket PATH]
   zekkyou mailbox-compact [--socket PATH]
   zekkyou mailbox ROOT_RUN_ID [--cursor N] [--socket PATH]
   zekkyou mailbox-get ROOT_RUN_ID MESSAGE_KEY [--socket PATH]
@@ -59,6 +60,7 @@ defmodule Zekkyou.CLI do
           delay_ms: :integer,
           id: :string,
           revision: :integer,
+          continuation_revision: :integer,
           note: :string,
           generation: :string
         ]
@@ -258,6 +260,28 @@ defmodule Zekkyou.CLI do
 
   defp command(["task-decide", _id, _decision], _opts),
     do: {:error, {:invalid_task_decide, :decision}}
+
+  defp command(["task-recover", id, key], opts) do
+    revision = Keyword.get(opts, :revision)
+    generation = Keyword.get(opts, :generation)
+    continuation_revision = Keyword.get(opts, :continuation_revision)
+
+    if is_binary(id) and String.trim(id) != "" and is_binary(key) and String.trim(key) != "" and
+         is_integer(revision) and revision > 0 and is_binary(generation) and
+         String.trim(generation) != "" and is_integer(continuation_revision) and
+         continuation_revision > 0 do
+      {:ok,
+       command_wire("tasks.recover", %{
+         "id" => id,
+         "key" => key,
+         "revision" => revision,
+         "generation" => generation,
+         "continuation_revision" => continuation_revision
+       })}
+    else
+      {:error, :invalid_parent_recovery_request}
+    end
+  end
 
   defp command([decision, request], _) when decision in ["approve", "deny"],
     do:

@@ -1,10 +1,10 @@
 # Development checkpoint — 2026-09-10
 
-Current Alto source: published Git commit
-`3bcec285537c5ab44d301a43737fc9d0b8351a7a`, pinned in both the service and
-terminal dependency declarations and lockfiles. `ALTO_PATH` is now optional.
-The sections below retain earlier development checkpoints; the latest runner
-migration validation is recorded at the end.
+Current Alto source: local, unpublished commit
+`f71d574a46e33011be288b2f38ee6e03231f4680`, pinned in both the service and
+terminal dependency declarations and lockfiles. Fresh builds need `ALTO_PATH`
+until publication. The sections below retain earlier development checkpoints;
+the latest parent-continuation validation is recorded at the end.
 
 ## Automated checks
 
@@ -369,3 +369,51 @@ Automatic parent continuations, independent child checkpoints and coordinated
 active-time accounting remain unfinished. Existing custom journal stores are
 not rewritten or adopted automatically. See [team recovery](docs/teams.md) for
 the configuration, retention and export contracts.
+
+## Exact parent-batch continuation — 2026-09-12
+
+Alto commit `f71d574a46e33011be288b2f38ee6e03231f4680` adds retained pending
+and ready parent frames, exact checkpoint restoration, journal acknowledgement
+and a single-use claim before downstream effects. It is committed in the normal
+Alto checkout on `codex/parent-continuations` and is not published. Zekkyou pins
+that revision and adds resident continuation/count-account stores, historical
+store bindings, and the explicitly fenced `task-recover` operator command.
+
+- **833 Alto tests** pass. New coverage includes continuation state transitions,
+  stale generations/revisions, store/account/configuration binding, deadline and
+  authority narrowing, pending/ready restoration, concurrent recovery and
+  protection of the winning session's transcript from a losing recovery attempt.
+  Alto formatting and production compilation with warnings as errors pass.
+- **84 Zekkyou service tests** pass (seed 231870), including five parent recovery
+  tests. They exercise resident store/account ownership, parent loss after child
+  completion, service restart, exact single-use integration, stale operator
+  fences, incomplete/claimed refusal, CLI validation, and removing a profile's
+  continuation store without allowing generic retry to bypass historical state.
+- The standalone fresh-process qualification passes for **Serial and Stepped**.
+  The parent is suspended while a real child retains its result, then the process
+  group is killed. A second service restores the exact parent through the CLI;
+  a third verifies completion and join acknowledgement. Durable external
+  counters prove exactly one plan, child effect and integration effect, with the
+  same session throughout. This found and fixed cold-start callback loading and
+  premature result decoding during admission.
+- **13 terminal tests** pass (seed 283525). Service and terminal production
+  compilation pass with warnings as errors after rebuilding the changed
+  dependency artifacts. Service release assembly, formatting, Python syntax and
+  diff whitespace checks pass. Build qualification uses the pinned Git checkouts
+  with `ALTO_PATH` unset; the unpublished commit objects were imported locally
+  from the normal Alto repository, so this does not establish remote availability.
+- The **complete relocated bundled-release suite passes**, including exact
+  parent recovery under both runners, uncertain child dispatch, cross-runner
+  approval checkpoints, team mailboxes and compaction, isolated workspaces,
+  durable reviewed patch integration, shared budgets, exclusive state ownership,
+  cancellation/shutdown and interrupted-task review. The installed archive runs
+  with system Erlang, Elixir and Mix absent from `PATH`.
+
+Parent recovery currently requires a completed child batch or an already ready
+parent frame. An uncertain dispatched child remains parked. A claimed frame
+cannot be replayed after interruption; this provides an at-most-once grant, not
+transactional exactly-once effects. Parent downtime consumes its absolute
+deadline. Independently suspended children, coordinated active-time accounting
+and explicit lifecycle retirement remain pending. Claimed continuations,
+acknowledged journals and count accounts remain retained and may exhaust their
+configured bounds. No source or release was pushed or published.

@@ -20,7 +20,7 @@ defmodule Zekkyou.Tasks do
     do: GenServer.call(Service.component(name, :tasks), {operation, payload}, 10_000)
 
   def commands(name) do
-    Map.new(~w(submit list get cancel reconcile decide), fn operation ->
+    Map.new(~w(submit list get cancel reconcile decide recover), fn operation ->
       {"tasks." <> operation, fn payload -> command(name, operation, payload) end}
     end)
   end
@@ -154,7 +154,7 @@ defmodule Zekkyou.Tasks do
 
   def handle_call({"get", %{"id" => id}}, _from, state) when is_binary(id) do
     reply =
-      case describe(state, id) do
+      case describe(state, id, true) do
         nil -> {:error, :unknown_task}
         task -> {:ok, %{"task" => task}}
       end
@@ -165,6 +165,38 @@ defmodule Zekkyou.Tasks do
   def handle_call({"cancel", %{"id" => id}}, _from, state) when is_binary(id) do
     reply = cancel_task(state, id)
     {:reply, reply, state}
+  end
+
+  def handle_call({"recover", %{"id" => id, "revision" => revision} = payload}, from, state)
+      when is_binary(id) and is_integer(revision) do
+    with :ok <- may_reconcile(state, id),
+         {:ok, recovered} <- OperationLog.recovery(state.ledger, id),
+         true <- recovered.revision == revision,
+         profile = get_in(recovered.recovery, [:payload, "profile"]),
+         :ok <-
+           Zekkyou.ParentRuns.recoverable(
+             state.config,
+             profile,
+             id,
+             payload,
+             get_in(recovered.recovery, [:payload, "parent_store"])
+           ) do
+      handle_call(
+        {"reconcile",
+         %{
+           "id" => id,
+           "revision" => revision,
+           "resolution" => "retry",
+           "note" => "Resume exact retained parent continuation",
+           :parent_recovery => true
+         }},
+        from,
+        state
+      )
+    else
+      false -> {:reply, {:error, :stale_revision}, state}
+      {:error, _} = error -> {:reply, error, state}
+    end
   end
 
   def handle_call(
@@ -187,6 +219,7 @@ defmodule Zekkyou.Tasks do
     reply =
       with true <- not is_nil(resolution) and is_binary(note) and byte_size(note) in 1..4_096,
            :ok <- may_reconcile(state, id),
+           :ok <- parent_retry_check(state, id, resolution, payload),
            {:ok, recovered} <-
              OperationLog.reconcile(state.ledger, id, revision, resolution, evidence),
            admission when admission in [:ok, {:error, :queue_full}] <-
@@ -258,6 +291,7 @@ defmodule Zekkyou.Tasks do
     {:reply, :ok, %{state | active: active}}
   end
 
+  def handle_call(:configuration, _from, state), do: {:reply, state.config, state}
   def handle_call(_request, _from, state), do: {:reply, {:error, :invalid_task_command}, state}
 
   @impl true
@@ -305,11 +339,13 @@ defmodule Zekkyou.Tasks do
     with true <- is_binary(id) and String.match?(id, ~r/\A[A-Za-z0-9_-]{1,100}\z/),
          true <- is_integer(delay) and delay in 0..31_536_000_000,
          true <- is_nil(resume) or is_binary(resume),
-         {:ok, _} <- Zekkyou.Config.resolve(config, profile) do
+         {:ok, options} <- Zekkyou.Config.resolve(config, profile),
+         {:ok, parent_store} <- Zekkyou.ParentRuns.store_binding(options) do
       {:ok,
        %{
          "id" => id,
          "profile" => profile,
+         "parent_store" => parent_store,
          "task" => text,
          "resume" => resume,
          "created_at_ms" => now,
@@ -325,9 +361,12 @@ defmodule Zekkyou.Tasks do
 
   defp execute(name, payload, context) do
     registry = Service.registry(name)
-    opts = execution_options(name, payload, context)
 
-    case Runs.start_run(registry, "scheduled/" <> payload["profile"], payload["task"], opts) do
+    outcome =
+      with {:ok, opts} <- execution_options(name, payload, context),
+           do: Runs.start_run(registry, "scheduled/" <> payload["profile"], payload["task"], opts)
+
+    case outcome do
       {:ok, run} ->
         session = Runs.run_session(registry, run)
 
@@ -341,7 +380,9 @@ defmodule Zekkyou.Tasks do
         await_run(registry, run, session)
 
       {:error, reason} ->
-        {:outcome, :rejected_before_dispatch, %{reason: inspect(reason)}}
+        if payload["parent_store"],
+          do: {:park, {:parent_recovery_unavailable, reason}},
+          else: {:outcome, :rejected_before_dispatch, %{reason: inspect(reason)}}
     end
   end
 
@@ -351,18 +392,28 @@ defmodule Zekkyou.Tasks do
 
     grant = Map.get(recovered, :checkpoint_grant_revision)
     decision = get_in(recovered, [:checkpoint_decision, "decision"])
-    opts = [owner: self()]
+    config = GenServer.call(Service.component(name, :tasks), :configuration)
 
-    cond do
-      is_integer(grant) and recovered.revision == grant + 1 and decision in ["approve", "deny"] ->
-        decision = if decision == "approve", do: :approve, else: :deny
-        Keyword.put(opts, :checkpoint, {recovered.checkpoint, decision})
+    approval_resume? =
+      is_integer(grant) and recovered.revision == grant + 1 and decision in ["approve", "deny"]
 
-      payload["resume"] ->
-        Keyword.put(opts, :resume, payload["resume"])
+    with {:ok, extra} <- Zekkyou.ParentRuns.options(config, name, payload, approval_resume?) do
+      opts = [owner: self()] ++ extra
 
-      true ->
-        opts
+      opts =
+        cond do
+          approval_resume? ->
+            decision = if decision == "approve", do: :approve, else: :deny
+            Keyword.put(opts, :checkpoint, {recovered.checkpoint, decision})
+
+          is_binary(payload["resume"]) and not Keyword.has_key?(opts, :continuation) ->
+            Keyword.put(opts, :resume, payload["resume"])
+
+          true ->
+            opts
+        end
+
+      {:ok, opts}
     end
   end
 
@@ -390,6 +441,16 @@ defmodule Zekkyou.Tasks do
   defp task_outcome({:error, :approval_suspended, %{checkpoint: packet}}, _run, _session)
        when is_map(packet),
        do: {:checkpoint, packet}
+
+  defp task_outcome(
+         {:error, {:cancelled, _} = reason, %{checkpoint: %{"kind" => "parent"}} = value},
+         run,
+         session
+       ),
+       do: task_outcome({:error, reason, %{value | checkpoint: nil}}, run, session)
+
+  defp task_outcome({:error, reason, %{checkpoint: %{"kind" => "parent"}}}, _run, _session),
+    do: {:park, {:parent_continuation, reason}}
 
   defp task_outcome({:error, reason, nil}, _run, _session),
     do: {:park, {:runner_failed_without_result, reason}}
@@ -425,7 +486,7 @@ defmodule Zekkyou.Tasks do
     {:outcome, class, evidence}
   end
 
-  defp describe(state, id) do
+  defp describe(state, id, include_parent \\ false) do
     record =
       case find_record(state, id) do
         {:ok, r} -> r
@@ -456,6 +517,16 @@ defmodule Zekkyou.Tasks do
         "profile" => payload["profile"],
         "task" => payload["task"],
         "status" => status,
+        "parent_continuation" =>
+          if(include_parent and status == "requires_operator",
+            do:
+              Zekkyou.ParentRuns.inspect_task(
+                state.config,
+                payload["profile"],
+                id,
+                payload["parent_store"]
+              )
+          ),
         "created_at_ms" => payload["created_at_ms"],
         "not_before_ms" => payload["not_before_ms"],
         "run_id" => (active && active.run_id) || (evidence[:run_id] || evidence["run_id"]),
@@ -677,6 +748,23 @@ defmodule Zekkyou.Tasks do
       _ -> {:error, :task_not_parked}
     end
   end
+
+  defp parent_retry_check(state, id, :retry_permitted, payload) do
+    {:ok, recovered} = OperationLog.recovery(state.ledger, id)
+
+    case get_in(recovered.recovery, [:payload, "parent_store"]) do
+      nil ->
+        :ok
+
+      _ ->
+        if(Map.get(payload, :parent_recovery) == true,
+          do: :ok,
+          else: {:error, :use_parent_recovery}
+        )
+    end
+  end
+
+  defp parent_retry_check(_, _, _, _), do: :ok
 
   defp find_record(state, id) do
     case Enum.find(Queue.snapshot(state.queue, 100), &(operation_key(&1) == id)) do

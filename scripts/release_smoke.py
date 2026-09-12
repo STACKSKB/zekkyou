@@ -23,6 +23,7 @@ import workspace_smoke
 import patch_integration_smoke
 import budget_smoke
 import child_recovery_smoke
+import parent_recovery_smoke
 
 
 def check_private(state):
@@ -176,6 +177,8 @@ def main(archive):
             team_smoke.main(mailboxes=True)
             child_recovery_smoke.main()
             child_recovery_smoke.main(runner="stepped")
+            parent_recovery_smoke.main()
+            parent_recovery_smoke.main(runner="stepped")
             workspace_smoke.main()
             patch_integration_smoke.main()
             budget_smoke.main()

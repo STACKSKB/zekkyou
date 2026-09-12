@@ -9,6 +9,7 @@ defmodule Zekkyou.Runtime.Alto do
     {stores, workers} = Zekkyou.Tasks.children(config, name)
 
     stores ++
+      Zekkyou.ParentRuns.children(config, name) ++
       [
         Zekkyou.Mailbox.child(config, name),
         Zekkyou.Workspaces.child(config, name),

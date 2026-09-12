@@ -79,15 +79,15 @@ supervises its `Alto.OperationLog`. The account persists shared effect and model
 request counts, including charges made after an approval snapshot was captured.
 Restoration must supply the same account generation; reopening cannot widen
 its caps. Sharing one account across profiles or tasks intentionally shares one
-allowance. The default remains a live shared counter, with consumed counts saved
-in supported root checkpoints.
+allowance. When a scheduled profile enables parent continuations, Zekkyou opens
+a per-task durable account unless the profile supplies one. Other profiles keep
+the live shared counter, with consumed counts saved in supported root checkpoints.
 
 This option persists count limits only. Root approval pauses keep their existing
-active-time semantics; coordinated active time for independent child jobs remains
-pending. Counts are not token or currency limits. Hosts retire accounts only
-after their execution tree ends, using the viewed revision; closure prevents
-future reservations but does not cancel already dispatched effects. Per-task
-automatic account creation and retirement await durable child lifecycle ownership.
+active-time semantics. A parent continuation has an absolute expiry, so downtime
+counts against its deadline. Counts are not token or currency limits. A parent
+continuation's account remains retained after the parent frame is claimed;
+automatic retirement is future work.
 
 Results return in assignment order and enter the lead's bounded conversation as
 `alto_subagent_results`. Token usage includes descendant usage; the result's
@@ -126,6 +126,25 @@ child summary before returning it to the lead. Results and parent identity
 links survive even if the lead cannot collect the reply. The default has no
 child journal.
 
+To let a scheduled lead resume a completed batch after its parent process is
+lost, enable both the journal and a parent continuation store in its trusted
+profile:
+
+```elixir
+Alto.Config.new(
+  provider: MyProvider,
+  loop: Zekkyou.Team.loop(workers: workers, journal: Zekkyou.ChildRuns.ledger()),
+  continuation_store: Zekkyou.ParentRuns.ledger(),
+  checkpoint_version: "team-parent-v1"
+)
+```
+
+The loop must support checkpoint dump/load for the child boundary. Alto saves a
+pending parent frame before child dispatch, then saves the exact post-join frame
+before granting the next parent effect. Serial and Stepped automatic mode use the
+same retained format. Until the Alto change is published, set `ALTO_PATH` to the
+local Alto checkout used by this feature; see [runner setup](runners.md).
+
 The default resident runtime now supervises a journal at
 `operations/team-children.jsonl` within the private state directory. Opt in with
 `journal: Zekkyou.ChildRuns.ledger()`; a named service uses `ledger(service_name)`.
@@ -144,8 +163,10 @@ The lead's `subagents_started` and completion events expose the journal binding.
 Trusted host code can reconnect with `Alto.Subagents.Journal.restore/2` and read
 ordered results with `join/1`. Results stay retained until that host durably
 saves its consuming continuation, acknowledges the viewed revision with
-`acknowledge/3`, then explicitly calls `retire/2`. Zekkyou does not yet automate
-that acknowledgement/retirement or reconstruct an interrupted parent batch.
+`acknowledge/3`, then explicitly calls `retire/2`. The parent continuation path
+acknowledges the completed join before claiming its post-join frame. It leaves
+the acknowledged journal and claimed parent cell retained; automatic retirement
+is future work.
 A dispatched worker without a saved result remains uncertain and cannot be
 silently rerun. Journal limits can reject retention; Alto preserves uncertainty
 and reports persistence failure rather than inventing a successful join. Exact
@@ -179,8 +200,8 @@ during delegation for both Serial and Stepped. One child has a retained result,
 one has performed an effect without returning, and one has not started. Two
 fresh observing service VMs recover identical paged results and journal bytes,
 leave the interrupted parent for operator review, and do not dispatch any child.
-This verifies recovery of evidence; automatic execution continuation remains
-the next shared-runtime step.
+This verifies recovery of evidence for an incomplete batch. It does not grant
+another dispatch or exercise the completed-batch parent continuation path.
 
 Workers share the configured workspace unless the team receives an optional
 [workspace manager](workspaces.md). The manager gives each child an independent
@@ -189,8 +210,12 @@ supplied example gives workers inspection tools and reserves file editing for
 the lead. [Reviewed patch integration](workspaces.md) is available for coding
 teams; independent child recovery remains pending, so milestone 5 is not complete.
 Neither mailbox durability nor separate session history makes child execution
-independently recoverable. A crash during
-active delegation parks the containing durable task for operator review.
+independently recoverable. A crash during active delegation parks the containing
+durable task for operator review. Once every child has a retained result, an
+operator can resume the parent at its saved continuation with
+`task-recover ID KEY --revision TASK_REV --generation G
+--continuation-revision CELL_REV`. An incomplete dispatched child stays pending
+and cannot be restarted by this command. See [scheduled task recovery](tasks.md).
 Checkpoint approvals inside an independently active child are not supported;
 use supported approval policies for workers and keep durable checkpointed
 integration in the lead. Live provider/model quality and cost have not been

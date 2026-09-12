@@ -48,12 +48,28 @@ compatible continuation contract or reject the packet without starting over.
 Code, tool and configuration checks still apply. Older packets are incompatible;
 follow the upgrade steps below before switching versions.
 
+Parent continuation is an opt-in boundary for root runs that delegate through
+an Alto child journal. A trusted profile supplies
+`continuation_store: Zekkyou.ParentRuns.ledger()`, a journal on its bounded
+subagents policy, and a `checkpoint_version`; the loop must implement checkpoint
+dump/load for the child boundary. Serial and Stepped automatic mode save the
+same pending and post-join parent frames. A completed batch can resume from its
+saved frame without repeating the plan or children. The claimed frame is a
+single-use grant for downstream effects. See [team recovery](teams.md) and the
+[`task-recover` command](tasks.md).
+
+The service and terminal dependency declarations and lockfiles pin Alto
+`f71d574a46e33011be288b2f38ee6e03231f4680`. This commit is currently local and
+unpublished, on `codex/parent-continuations` in the normal Alto checkout. Set
+`ALTO_PATH=/absolute/path/to/alto` to that checkout for a fresh build until
+publication; the override applies to both packages. Qualify persisted state
+against this exact revision before replacing an executable.
+
 ## Upgrading from the durable-host development revision
 
-The dependency and lockfiles now pin published Alto commit
-`3bcec285537c5ab44d301a43737fc9d0b8351a7a`. Both the service and optional terminal
-package build from Git dependencies without `ALTO_PATH`. A local development
-override remains available, but validate it against the same published revision.
+The published runner-refactor baseline was Alto
+`3bcec285537c5ab44d301a43737fc9d0b8351a7a`. The following migration guidance
+still applies when upgrading older durable-host state to the current pin.
 
 Before replacing the executable:
 
