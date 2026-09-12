@@ -13,19 +13,19 @@ The dependency and lockfiles pin Alto commit
 `6f4182083d13d49dfdce8014896041bb8809a690`, which includes exact parent-batch
 continuations, independent child approvals and explicit resource retirement
 for the Serial/Stepped runners.
-This commit is currently local and unpublished. Until publication, build with
-an Alto checkout at that commit (locally, `codex/parent-continuations`):
+This commit is published on Alto’s `main` branch for the `0.0.1` release.
+Build directly from the pinned Git dependency:
 
 ```sh
-export ALTO_PATH=/absolute/path/to/alto
 mix deps.get
 mix test
 mix escript.build
 python3 -B scripts/smoke.py
 ```
 
-The override also applies to the optional terminal package. Validate against
-the pinned commit before upgrading persisted state. See
+For local Alto development, the optional `ALTO_PATH=/absolute/path/to/alto`
+override applies to both packages. Validate against the pinned commit before
+upgrading persisted state. See
 [runner selection and upgrade compatibility](docs/runners.md), particularly
 for suspended approvals and retained worker workspaces.
 

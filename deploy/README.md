@@ -12,12 +12,11 @@ The optional terminal client is packaged separately. It is not included here.
 
 ## Build and qualify
 
-From the Zekkyou checkout, use an Alto checkout at the pinned commit
-`6f4182083d13d49dfdce8014896041bb8809a690`. That commit is currently local and
-unpublished, so a fresh build needs the explicit path override:
+From the Zekkyou checkout, build against the published Alto commit
+`6f4182083d13d49dfdce8014896041bb8809a690` pinned in the dependency lockfile.
+No local Alto checkout or path override is required:
 
 ```sh
-export ALTO_PATH=/absolute/path/to/alto
 MIX_ENV=prod mix deps.get
 MIX_ENV=prod mix compile --warnings-as-errors
 MIX_ENV=prod mix release --overwrite

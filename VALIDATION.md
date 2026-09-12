@@ -1,9 +1,9 @@
 # Development checkpoint — 2026-09-10
 
-Current Alto source: local, unpublished commit
+Current Alto source: published commit
 `6f4182083d13d49dfdce8014896041bb8809a690`, pinned in both the service and
-terminal dependency declarations and lockfiles. Fresh builds need `ALTO_PATH`
-until publication. The sections below retain earlier development checkpoints;
+terminal dependency declarations and lockfiles. Fresh builds use the Git
+dependency directly. The sections below retain earlier development checkpoints;
 the latest recovery audit validation is recorded at the end.
 
 ## Automated checks
@@ -519,3 +519,14 @@ parent continuation, cross-runner root approvals, mailbox retention, workspace
 recovery, reviewed patch integration, shared budgets and interrupted shutdown.
 The installed runtime runs without system Erlang, Elixir or Mix. No changes
 were pushed or published during this audit.
+
+
+## Alto publication status — 2026-09-12
+
+The Alto audit task subsequently published the exact tested pin
+`6f4182083d13d49dfdce8014896041bb8809a690` to `STACKSKB/alto` main for version
+`0.0.1`; the release checkout's `origin/main` matches it. No Zekkyou code or
+dependency pin changed. Earlier notes about unpublished objects describe the
+validation environment at that time. Fresh builds now fetch the pinned Git
+revision without requiring `ALTO_PATH`; that override remains optional for
+local development. Zekkyou itself has not been pushed by this task.
