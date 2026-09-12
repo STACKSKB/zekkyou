@@ -238,10 +238,17 @@ overrides are resolved through the team's trusted worker configuration, while
 inherited providers come from the current parent. Live provider/model quality
 and cost have not been qualified by the local deterministic tests.
 
-If child checkpoint validation fails after a workspace has been reopened, its
-workspace record can advance or freeze even though no child effect was granted.
-Inspect and reconcile that workspace before another recovery attempt; changing
-code or trusted configuration is not a transparent retry boundary.
+Team's complete trusted worker configuration participates in the parent
+checkpoint fingerprint, including embedded provider options. Changing an API
+key in those options invalidates the parent checkpoint before the child provider
+resolver runs. Keep that configuration stable across recovery; omitting resolved
+credentials from child packets does not make arbitrary credential rotation
+compatible with saved Team checkpoints.
+
+Child checkpoint restoration is validated before workspace activation. Admission
+runs under the workspace lock, and rejected restoration or admission leaves the
+workspace unchanged. Changing code or trusted configuration can still invalidate
+a checkpoint and require operator reconciliation.
 
 `python3 -B scripts/team_smoke.py` (after `mix escript.build`) verifies the
 complete team/approval flow across three fresh service VMs, including final

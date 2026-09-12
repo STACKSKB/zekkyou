@@ -13,7 +13,7 @@ The optional terminal client is packaged separately. It is not included here.
 ## Build and qualify
 
 From the Zekkyou checkout, use an Alto checkout at the pinned commit
-`3195d2153dcaca3b17e16e7aef8ac86721e98c8a`. That commit is currently local and
+`6f4182083d13d49dfdce8014896041bb8809a690`. That commit is currently local and
 unpublished, so a fresh build needs the explicit path override:
 
 ```sh

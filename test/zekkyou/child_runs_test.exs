@@ -143,6 +143,48 @@ defmodule Zekkyou.ChildRunsTest do
     assert length(second) == 1
   end
 
+  test "approval inspection preserves the viewed child identity across sibling decisions", %{
+    dir: dir,
+    name: name
+  } do
+    ledger = start_ledger(config(dir), name)
+    batch = open!(ledger, "approvals", ["one", "two"])
+    request = %{"tool" => "write", "input" => "original"}
+
+    for id <- ["one", "two"] do
+      {:ok, ticket} = Journal.dispatch(batch, id)
+      {:ok, _} = Journal.suspend(ticket, %{"request" => request})
+    end
+
+    {:ok, before} = Journal.read(batch)
+    command = ChildRuns.commands(name)["children.approval"]
+
+    args = %{
+      "key" => batch.key,
+      "child" => "one",
+      "generation" => batch.generation,
+      "revision" => before.revision
+    }
+
+    assert {:ok, first} = command.(args)
+    assert first.request == request
+    assert first.revision == before.revision
+    assert first.state == :suspended
+    assert {:ok, ^before} = Journal.read(batch)
+    assert {:error, _} = command.(%{args | "generation" => "replaced"})
+
+    {:ok, sibling} = command.(%{args | "child" => "two"})
+    {:ok, _} = Journal.decide(batch, before.revision, sibling.identity, :deny)
+    assert {:error, :stale_child_approval} = command.(args)
+
+    {:ok, after_decision} = Journal.read(batch)
+    assert {:ok, current} = command.(%{args | "revision" => after_decision.revision})
+    assert current.identity == first.identity
+    assert current.request == request
+    assert current.state == :suspended
+    assert {:ok, ^after_decision} = Journal.read(batch)
+  end
+
   test "retention full protects an active batch", %{dir: dir, name: name} do
     ledger = start_ledger(config(dir, max_retained: 1), name)
     batch = open!(ledger, "held", ["worker"])

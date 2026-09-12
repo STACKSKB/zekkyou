@@ -173,37 +173,19 @@ defmodule Zekkyou.ParentRuns do
   end
 
   defp latest(store, id) do
-    OperationLog.keys(store)
-    |> Enum.reduce_while({:ok, []}, fn key, {:ok, acc} ->
-      with {:ok, entry} <- OperationLog.recovery(store, key) do
-        if get_in(entry.checkpoint || %{}, ["metadata", "host_key"]) == id do
-          identity = %{"key" => key, "generation" => entry.recovery["generation"]}
+    with {:ok, entries} <- Continuation.list(store, %{"host_key" => id}) do
+      values =
+        Enum.map(entries, fn %{identity: identity, snapshot: snapshot} ->
+          %{
+            identity: identity,
+            revision: snapshot.revision,
+            phase: snapshot.phase,
+            operation_seq: snapshot.metadata["operation_seq"],
+            session_id: snapshot.metadata["parent_session_id"]
+          }
+        end)
 
-          with {:ok, cell} <- Continuation.restore(store, identity),
-               {:ok, snapshot} <- Continuation.read(cell) do
-            value = %{
-              identity: identity,
-              revision: snapshot.revision,
-              phase: snapshot.phase,
-              operation_seq: snapshot.metadata["operation_seq"],
-              session_id: snapshot.metadata["parent_session_id"]
-            }
-
-            {:cont, {:ok, [value | acc]}}
-          else
-            error -> {:halt, error}
-          end
-        else
-          {:cont, {:ok, acc}}
-        end
-      else
-        error -> {:halt, error}
-      end
-    end)
-    |> case do
-      {:ok, []} -> {:ok, nil}
-      {:ok, values} -> {:ok, Enum.max_by(values, & &1.operation_seq)}
-      error -> error
+      {:ok, Enum.max_by(values, & &1.operation_seq, fn -> nil end)}
     end
   catch
     :exit, reason -> {:error, {:parent_store_unavailable, reason}}

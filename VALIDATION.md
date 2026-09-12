@@ -1,10 +1,10 @@
 # Development checkpoint — 2026-09-10
 
 Current Alto source: local, unpublished commit
-`3195d2153dcaca3b17e16e7aef8ac86721e98c8a`, pinned in both the service and
+`6f4182083d13d49dfdce8014896041bb8809a690`, pinned in both the service and
 terminal dependency declarations and lockfiles. Fresh builds need `ALTO_PATH`
 until publication. The sections below retain earlier development checkpoints;
-the latest parent-continuation validation is recorded at the end.
+the latest recovery audit validation is recorded at the end.
 
 ## Automated checks
 
@@ -475,3 +475,47 @@ Transcripts, workspace patches and mailbox contents retain their own lifecycle.
 Retirement releases retained-operation capacity when terminal records are evicted;
 it does not compact append-only audit logs or remove their byte limits.
 No changes have been pushed or published.
+
+
+## Recovery boundary audit — 2026-09-12
+
+Alto `6f4182083d13d49dfdce8014896041bb8809a690` is the audited local pin.
+Its coordinating audit reports **864 tests passing**, formatting and production
+compilation with warnings as errors. It validates child checkpoint restoration
+before activating a workspace and admits resumed work under the workspace lock.
+Rejected restoration or admission leaves workspace state unchanged. Successful
+checkpoint fingerprint bytes remain compatible; unavailable durable identities
+fail explicitly. Concurrent journal retirement can finish idempotently.
+
+Zekkyou commit `26ded43` contains unavailable parent-store failures without
+restarting Tasks, passes already bounded profile options into ParentRuns, treats
+an explicit nil budget account as task-owned, and permits cleanup of ordinary
+terminal profiles without a continuation store. The subsequent migration uses
+Alto's validated continuation discovery, account and journal lookups, and
+single-snapshot child approval inspection. Application cleanup manifests remain
+Zekkyou-owned; saved store, generation, revision and join receipt fences remain
+in force. Replacement generations are never retired by an older cleanup plan.
+
+- **105 service tests pass** (seed 361503), including unavailable-store survival,
+  ordinary terminal cleanup, nil-account ownership, and stale sibling approval
+  views without mutating the retained checkpoint.
+- **13 terminal tests pass** (seed 817766).
+- Service and terminal production builds pass with warnings as errors against
+  the pinned Git checkouts, with no `ALTO_PATH` override. Formatting and diff
+  whitespace checks pass. Local Alto objects were imported for these builds;
+  the commit is still unpublished and fresh external builds need `ALTO_PATH`.
+
+Team's worker options are part of the parent fingerprint. Although child
+packets omit resolved provider credentials, changing an embedded worker API key
+invalidates the parent checkpoint before child provider resolution. Recovery
+requires stable trusted configuration; this audit does not introduce arbitrary
+credential rotation. The absolute-expiry, explicit-approval-boundary recovery,
+uncertain-dispatch and audit-log retention limitations above still apply.
+
+The **complete relocated bundled-release suite passes** against the audited pin:
+independent sibling approvals and durable cleanup under Serial and Stepped,
+named Team worker recovery, uncertain child evidence without redispatch, exact
+parent continuation, cross-runner root approvals, mailbox retention, workspace
+recovery, reviewed patch integration, shared budgets and interrupted shutdown.
+The installed runtime runs without system Erlang, Elixir or Mix. No changes
+were pushed or published during this audit.

@@ -10,7 +10,7 @@ Development is in progress; this is not yet the unattended-operation release.
 ## Development
 
 The dependency and lockfiles pin Alto commit
-`3195d2153dcaca3b17e16e7aef8ac86721e98c8a`, which includes exact parent-batch
+`6f4182083d13d49dfdce8014896041bb8809a690`, which includes exact parent-batch
 continuations, independent child approvals and explicit resource retirement
 for the Serial/Stepped runners.
 This commit is currently local and unpublished. Until publication, build with

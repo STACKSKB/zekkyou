@@ -116,9 +116,9 @@ defmodule Zekkyou.Lifecycle do
   end
 
   defp unreserved_budget(server, id) do
-    case OperationLog.recovery(server, "task:" <> id) do
+    case Account.lookup(server, "task:" <> id) do
       {:error, :not_found} -> :ok
-      {:ok, _} -> {:error, :task_id_retained}
+      {:ok, _, _} -> {:error, :task_id_retained}
       error -> error
     end
   end
@@ -126,17 +126,9 @@ defmodule Zekkyou.Lifecycle do
   defp unreserved_parent(nil, _id), do: :ok
 
   defp unreserved_parent(server, id) do
-    server
-    |> OperationLog.keys()
-    |> collect(fn key ->
-      with {:ok, entry} <- OperationLog.recovery(server, key) do
-        if get_in(entry.checkpoint || %{}, ["metadata", "host_key"]) == id,
-          do: {:error, :task_id_retained},
-          else: {:ok, nil}
-      end
-    end)
-    |> case do
-      {:ok, _} -> :ok
+    case Continuation.list(server, %{"host_key" => id}) do
+      {:ok, []} -> :ok
+      {:ok, _} -> {:error, :task_id_retained}
       error -> error
     end
   end
@@ -231,35 +223,29 @@ defmodule Zekkyou.Lifecycle do
   defp parent_resources(task, stores) do
     parent = stores["parent"].server
 
-    collect(OperationLog.keys(parent), fn key ->
-      with {:ok, entry} <- OperationLog.recovery(parent, key) do
-        if get_in(entry.checkpoint || %{}, ["metadata", "host_key"]) == task do
-          with :ok <- require_journal(stores),
-               {:ok, cell} <- Continuation.restore(parent, identity(key, entry)),
-               {:ok, snapshot} <- Continuation.read(cell),
-               true <- snapshot.phase == :claimed,
-               {:ok, batch} <-
-                 Journal.restore(stores["journal"].server, snapshot.metadata["journal"]),
-               {:ok, journal} <- Journal.read(batch),
-               %{"continuation" => binding} <- journal.packet["join"],
-               true <- binding == Continuation.identity(cell) do
-            {:ok,
-             %{
-               cell: resource("parent", Continuation.identity(cell), snapshot),
-               journal: resource("journal", Journal.identity(batch), journal),
-               account: snapshot.packet["budget"]["account"]
-             }}
-          else
-            false -> {:error, :unconsumed_parent_resources}
-            nil -> {:error, :unconsumed_parent_resources}
-            {:error, _} = error -> error
-            _ -> {:error, :parent_join_receipt_mismatch}
-          end
+    with {:ok, listed} <- Continuation.list(parent, %{"host_key" => task}) do
+      collect(listed, fn %{identity: identity, snapshot: snapshot} ->
+        with :ok <- require_journal(stores),
+             true <- snapshot.phase == :claimed,
+             %{"key" => journal_key} = binding <- snapshot.metadata["journal"],
+             {:ok, batch, journal} <- Journal.lookup(stores["journal"].server, journal_key),
+             true <- Journal.identity(batch) == binding,
+             %{"continuation" => receipt} <- journal.packet["join"],
+             true <- receipt == identity do
+          {:ok,
+           %{
+             cell: resource("parent", identity, snapshot),
+             journal: resource("journal", Journal.identity(batch), journal),
+             account: snapshot.packet["budget"]["account"]
+           }}
         else
-          {:ok, nil}
+          false -> {:error, :unconsumed_parent_resources}
+          nil -> {:error, :unconsumed_parent_resources}
+          {:error, _} = error -> error
+          _ -> {:error, :parent_join_receipt_mismatch}
         end
-      end
-    end)
+      end)
+    end
   end
 
   defp require_journal(%{"journal" => _}), do: :ok
@@ -279,16 +265,9 @@ defmodule Zekkyou.Lifecycle do
 
     case Enum.uniq(Enum.map(cells, & &1.account)) do
       [] ->
-        case OperationLog.recovery(stores["budget"].server, key) do
-          {:ok, %{recovery: %{"generation" => generation}}} ->
-            account = %Account{
-              ledger: stores["budget"].server,
-              key: key,
-              generation: generation
-            }
-
-            with {:ok, snapshot} <- Account.read(account),
-                 do: {:ok, [resource("budget", Account.identity(account), snapshot)]}
+        case Account.lookup(stores["budget"].server, key) do
+          {:ok, account, snapshot} ->
+            {:ok, [resource("budget", Account.identity(account), snapshot)]}
 
           {:error, :not_found} ->
             {:ok, []}
@@ -297,11 +276,14 @@ defmodule Zekkyou.Lifecycle do
             error
         end
 
-      [%{"key" => ^key, "generation" => generation} = binding] ->
-        account = %Account{ledger: stores["budget"].server, key: key, generation: generation}
-
-        with {:ok, snapshot} <- Account.read(account),
-             do: {:ok, [resource("budget", binding, snapshot)]}
+      [%{"key" => ^key} = binding] ->
+        with {:ok, account, snapshot} <- Account.lookup(stores["budget"].server, key),
+             true <- Account.identity(account) == binding do
+          {:ok, [resource("budget", binding, snapshot)]}
+        else
+          false -> {:error, :budget_account_mismatch}
+          {:error, _} = error -> error
+        end
 
       _ ->
         {:error, :task_budget_ownership_mismatch}
@@ -326,15 +308,15 @@ defmodule Zekkyou.Lifecycle do
     binding = resource["identity"]
     # Only terminal records can be evicted or replaced. The saved cleanup intent
     # authorizes finishing that original generation, never touching its successor.
-    case OperationLog.recovery(server, binding["key"]) do
+    case lookup_resource(resource["role"], server, binding["key"]) do
       {:error, :not_found} ->
         {:ok, :retired}
 
-      {:ok, entry} ->
-        if entry.recovery["generation"] != binding["generation"] do
+      {:ok, handle, snapshot} ->
+        if resource_identity(resource["role"], handle)["generation"] != binding["generation"] do
           {:ok, :retired}
         else
-          retire_existing(resource, server)
+          retire_existing(resource, handle, snapshot)
         end
 
       error ->
@@ -342,24 +324,23 @@ defmodule Zekkyou.Lifecycle do
     end
   end
 
-  defp retire_existing(%{"role" => role, "identity" => binding, "revision" => revision}, server) do
-    {handle, module, method} =
+  defp lookup_resource("budget", server, key), do: Account.lookup(server, key)
+  defp lookup_resource("parent", server, key), do: Continuation.lookup(server, key)
+  defp lookup_resource("journal", server, key), do: Journal.lookup(server, key)
+
+  defp resource_identity("budget", account), do: Account.identity(account)
+  defp resource_identity("parent", cell), do: Continuation.identity(cell)
+  defp resource_identity("journal", batch), do: Journal.identity(batch)
+
+  defp retire_existing(%{"role" => role, "revision" => revision}, handle, snapshot) do
+    {module, method} =
       case role do
-        "budget" ->
-          {%Account{ledger: server, key: binding["key"], generation: binding["generation"]},
-           Account, :close}
-
-        "parent" ->
-          {%Continuation{ledger: server, key: binding["key"], generation: binding["generation"]},
-           Continuation, :retire}
-
-        "journal" ->
-          {%Journal{ledger: server, key: binding["key"], generation: binding["generation"]},
-           Journal, :retire}
+        "budget" -> {Account, :close}
+        "parent" -> {Continuation, :retire}
+        "journal" -> {Journal, :retire}
       end
 
-    with {:ok, snapshot} <- module.read(handle),
-         true <- snapshot.state != :active or snapshot.revision == revision,
+    with true <- snapshot.state != :active or snapshot.revision == revision,
          :ok <- apply(module, method, [handle, snapshot.revision]) do
       {:ok, :retired}
     else
@@ -370,8 +351,6 @@ defmodule Zekkyou.Lifecycle do
 
   defp resource(role, binding, snapshot),
     do: %{"role" => role, "identity" => binding, "revision" => snapshot.revision}
-
-  defp identity(key, entry), do: %{"key" => key, "generation" => entry.recovery["generation"]}
 
   defp collect(values, fun) do
     Enum.reduce_while(values, {:ok, []}, fn value, {:ok, acc} ->

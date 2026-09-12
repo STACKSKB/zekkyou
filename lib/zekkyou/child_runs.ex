@@ -74,24 +74,17 @@ defmodule Zekkyou.ChildRuns do
        })
        when is_binary(key) and is_binary(id) and is_binary(generation) and
               byte_size(generation) > 0 and is_integer(revision) and revision > 0 do
-    with {:ok, batch} <- Journal.restore(ledger, %{"key" => key, "generation" => generation}),
-         {:ok, before} <- Journal.read(batch),
-         :ok <- viewed(before, generation, revision),
-         {:ok, suspended} <- Journal.suspended(batch),
-         child when not is_nil(child) <- Enum.find(suspended, &(&1.id == id)),
-         {:ok, after_read} <- Journal.read(batch),
-         :ok <- viewed(after_read, generation, revision) do
+    batch = %Journal{ledger: ledger, key: key, generation: generation}
+
+    with {:ok, child} <- Journal.inspect_approval(batch, revision, id) do
       {:ok,
        %{
          identity: child.identity,
-         revision: revision,
+         revision: child.revision,
          state: child.state,
          decision: child.decision,
          request: child.checkpoint["request"]
        }}
-    else
-      nil -> {:error, :child_approval_not_found}
-      {:error, _} = error -> error
     end
   end
 
@@ -122,15 +115,7 @@ defmodule Zekkyou.ChildRuns do
   defp execute(_, _, _), do: {:error, :invalid_child_command}
 
   defp read(ledger, key) do
-    with {:ok, entry} <- OperationLog.recovery(ledger, key),
-         %{tool: "alto_subagent_batch", recovery: %{"generation" => generation}} <- entry,
-         {:ok, batch} <- Journal.restore(ledger, %{"key" => key, "generation" => generation}),
-         {:ok, snapshot} <- Journal.read(batch) do
-      {:ok, snapshot}
-    else
-      {:error, _} = error -> error
-      _ -> {:error, :invalid_child_batch}
-    end
+    with {:ok, _batch, snapshot} <- Journal.lookup(ledger, key), do: {:ok, snapshot}
   end
 
   defp summary(key, snapshot) do

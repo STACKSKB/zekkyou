@@ -65,11 +65,14 @@ single-use grant prevents a losing concurrent attempt from completing the
 winner's journal or overwriting its transcript. The team loop resolves named
 worker providers from trusted configuration; custom loops with provider
 overrides need Alto's `resolve_child_provider/2` callback and stable profile keys.
+Team also fingerprints its complete worker configuration as parent driver
+options. Embedded credential changes invalidate that parent checkpoint before
+child provider resolution, so keep those options stable across recovery.
 Explicit terminal-task cleanup uses Alto's retirement APIs and preserves a
 durable plan until all consumed resources have been retired.
 
 The service and terminal dependency declarations and lockfiles pin Alto
-`3195d2153dcaca3b17e16e7aef8ac86721e98c8a`. This commit is currently local and
+`6f4182083d13d49dfdce8014896041bb8809a690`. This commit is currently local and
 unpublished, on `codex/parent-continuations` in the normal Alto checkout. Set
 `ALTO_PATH=/absolute/path/to/alto` to that checkout for a fresh build until
 publication; the override applies to both packages. Qualify persisted state
