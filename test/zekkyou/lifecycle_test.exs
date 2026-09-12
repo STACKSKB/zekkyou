@@ -111,6 +111,70 @@ defmodule Zekkyou.LifecycleTest do
              Tasks.command(name, "cleanup", %{"id" => "done", "revision" => task["revision"]})
   end
 
+  test "ordinary terminal cleanup is idempotent", %{name: name} do
+    assert {:ok, _} =
+             Tasks.command(name, "submit", %{
+               "id" => "ordinary-done",
+               "profile" => "echo",
+               "task" => "work"
+             })
+
+    task = eventually(name, "ordinary-done", "completed")
+
+    assert {:ok, %{status: "cleaned", resources: 0}} =
+             Tasks.command(name, "cleanup", %{
+               "id" => "ordinary-done",
+               "revision" => task["revision"]
+             })
+
+    assert {:ok, %{status: "cleaned", resources: 0}} =
+             Tasks.command(name, "cleanup", %{
+               "id" => "ordinary-done",
+               "revision" => task["revision"]
+             })
+
+    assert {:error, :stale_revision} =
+             Tasks.command(name, "cleanup", %{
+               "id" => "ordinary-done",
+               "revision" => task["revision"] + 1
+             })
+  end
+
+  test "explicit nil budget account is treated as task-owned", %{name: name, config: config} do
+    profile = config.profiles["parent"]
+    nil_budget = Alto.Config.new(Keyword.put(profile.run_options, :budget_account, nil))
+    config = %{config | profiles: Map.put(config.profiles, "nil-budget", nil_budget)}
+    stop_supervised!(Service)
+    start_supervised!({Service, config: config, name: name})
+
+    assert {:ok, _} =
+             Tasks.command(name, "submit", %{
+               "id" => "nil-budget",
+               "profile" => "nil-budget",
+               "task" => "work"
+             })
+
+    task = eventually(name, "nil-budget", "completed")
+
+    {:ok, entry} = OperationLog.recovery(ParentRuns.budgets(name), "task:nil-budget")
+
+    account = %Account{
+      ledger: ParentRuns.budgets(name),
+      key: "task:nil-budget",
+      generation: entry.recovery["generation"]
+    }
+
+    assert {:ok, %{state: :active}} = Account.read(account)
+
+    assert {:ok, %{status: "cleaned", resources: 3}} =
+             Tasks.command(name, "cleanup", %{
+               "id" => "nil-budget",
+               "revision" => task["revision"]
+             })
+
+    assert {:ok, %{state: :closed}} = Account.read(account)
+  end
+
   test "cleanup refuses running, pending, and stale tasks", %{name: name} do
     assert {:ok, _} =
              Tasks.command(name, "submit", %{

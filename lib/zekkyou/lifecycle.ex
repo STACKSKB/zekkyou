@@ -32,7 +32,7 @@ defmodule Zekkyou.Lifecycle do
 
     with {:ok, opts} <- Config.resolve(config, payload["profile"]),
          {:ok, binding} <- ParentRuns.store_binding(opts),
-         true <- not is_nil(binding) and binding == payload["parent_store"],
+         true <- binding == payload["parent_store"],
          {:ok, stores} <- stores(opts, name),
          {:ok, entry} <-
            plan(ledger(name), key, payload, generation, recovered.revision, stores, opts),
@@ -142,10 +142,13 @@ defmodule Zekkyou.Lifecycle do
   end
 
   defp stores(opts, name) do
-    servers = %{
-      "parent" => Keyword.fetch!(opts, :continuation_store),
-      "budget" => ParentRuns.budgets(name)
-    }
+    servers = %{"budget" => ParentRuns.budgets(name)}
+
+    servers =
+      case Keyword.get(opts, :continuation_store) do
+        nil -> servers
+        store -> Map.put(servers, "parent", store)
+      end
 
     servers =
       case Keyword.get(opts, :loop) do
@@ -215,38 +218,7 @@ defmodule Zekkyou.Lifecycle do
     do: Map.new(stores, fn {role, store} -> {role, store.identity} end)
 
   defp resources(task, stores, opts) do
-    parent = stores["parent"].server
-
-    with {:ok, cells} <-
-           collect(OperationLog.keys(parent), fn key ->
-             with {:ok, entry} <- OperationLog.recovery(parent, key) do
-               if get_in(entry.checkpoint || %{}, ["metadata", "host_key"]) == task do
-                 with :ok <- require_journal(stores),
-                      {:ok, cell} <- Continuation.restore(parent, identity(key, entry)),
-                      {:ok, snapshot} <- Continuation.read(cell),
-                      true <- snapshot.phase == :claimed,
-                      {:ok, batch} <-
-                        Journal.restore(stores["journal"].server, snapshot.metadata["journal"]),
-                      {:ok, journal} <- Journal.read(batch),
-                      %{"continuation" => binding} <- journal.packet["join"],
-                      true <- binding == Continuation.identity(cell) do
-                   {:ok,
-                    %{
-                      cell: resource("parent", Continuation.identity(cell), snapshot),
-                      journal: resource("journal", Journal.identity(batch), journal),
-                      account: snapshot.packet["budget"]["account"]
-                    }}
-                 else
-                   false -> {:error, :unconsumed_parent_resources}
-                   nil -> {:error, :unconsumed_parent_resources}
-                   {:error, _} = error -> error
-                   _ -> {:error, :parent_join_receipt_mismatch}
-                 end
-               else
-                 {:ok, nil}
-               end
-             end
-           end),
+    with {:ok, cells} <- parent_resources(task, stores),
          {:ok, accounts} <- owned_account(task, cells, stores, opts) do
       {:ok, Enum.map(cells, & &1.journal) ++ Enum.map(cells, & &1.cell) ++ accounts}
     else
@@ -254,45 +226,85 @@ defmodule Zekkyou.Lifecycle do
     end
   end
 
+  defp parent_resources(_task, stores) when not is_map_key(stores, "parent"), do: {:ok, []}
+
+  defp parent_resources(task, stores) do
+    parent = stores["parent"].server
+
+    collect(OperationLog.keys(parent), fn key ->
+      with {:ok, entry} <- OperationLog.recovery(parent, key) do
+        if get_in(entry.checkpoint || %{}, ["metadata", "host_key"]) == task do
+          with :ok <- require_journal(stores),
+               {:ok, cell} <- Continuation.restore(parent, identity(key, entry)),
+               {:ok, snapshot} <- Continuation.read(cell),
+               true <- snapshot.phase == :claimed,
+               {:ok, batch} <-
+                 Journal.restore(stores["journal"].server, snapshot.metadata["journal"]),
+               {:ok, journal} <- Journal.read(batch),
+               %{"continuation" => binding} <- journal.packet["join"],
+               true <- binding == Continuation.identity(cell) do
+            {:ok,
+             %{
+               cell: resource("parent", Continuation.identity(cell), snapshot),
+               journal: resource("journal", Journal.identity(batch), journal),
+               account: snapshot.packet["budget"]["account"]
+             }}
+          else
+            false -> {:error, :unconsumed_parent_resources}
+            nil -> {:error, :unconsumed_parent_resources}
+            {:error, _} = error -> error
+            _ -> {:error, :parent_join_receipt_mismatch}
+          end
+        else
+          {:ok, nil}
+        end
+      end
+    end)
+  end
+
   defp require_journal(%{"journal" => _}), do: :ok
   defp require_journal(_), do: {:error, :child_journal_required}
 
   defp owned_account(task, cells, stores, opts) do
     # An explicitly supplied profile account may span tasks and belongs to its host.
-    if Keyword.has_key?(opts, :budget_account) do
-      {:ok, []}
-    else
-      key = "task:" <> task
+    case Keyword.get(opts, :budget_account) do
+      %Account{} -> {:ok, []}
+      nil -> owned_task_account(task, cells, stores)
+      _ -> {:error, :invalid_task_budget_account}
+    end
+  end
 
-      case Enum.uniq(Enum.map(cells, & &1.account)) do
-        [] ->
-          case OperationLog.recovery(stores["budget"].server, key) do
-            {:ok, %{recovery: %{"generation" => generation}}} ->
-              account = %Account{
-                ledger: stores["budget"].server,
-                key: key,
-                generation: generation
-              }
+  defp owned_task_account(task, cells, stores) do
+    key = "task:" <> task
 
-              with {:ok, snapshot} <- Account.read(account),
-                   do: {:ok, [resource("budget", Account.identity(account), snapshot)]}
+    case Enum.uniq(Enum.map(cells, & &1.account)) do
+      [] ->
+        case OperationLog.recovery(stores["budget"].server, key) do
+          {:ok, %{recovery: %{"generation" => generation}}} ->
+            account = %Account{
+              ledger: stores["budget"].server,
+              key: key,
+              generation: generation
+            }
 
-            {:error, :not_found} ->
-              {:ok, []}
+            with {:ok, snapshot} <- Account.read(account),
+                 do: {:ok, [resource("budget", Account.identity(account), snapshot)]}
 
-            error ->
-              error
-          end
+          {:error, :not_found} ->
+            {:ok, []}
 
-        [%{"key" => ^key, "generation" => generation} = binding] ->
-          account = %Account{ledger: stores["budget"].server, key: key, generation: generation}
+          error ->
+            error
+        end
 
-          with {:ok, snapshot} <- Account.read(account),
-               do: {:ok, [resource("budget", binding, snapshot)]}
+      [%{"key" => ^key, "generation" => generation} = binding] ->
+        account = %Account{ledger: stores["budget"].server, key: key, generation: generation}
 
-        _ ->
-          {:error, :task_budget_ownership_mismatch}
-      end
+        with {:ok, snapshot} <- Account.read(account),
+             do: {:ok, [resource("budget", binding, snapshot)]}
+
+      _ ->
+        {:error, :task_budget_ownership_mismatch}
     end
   end
 

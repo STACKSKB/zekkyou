@@ -2,7 +2,7 @@ defmodule Zekkyou.ParentRuns do
   @moduledoc "Resident parent recovery selection and per-task shared budget policy."
   alias Alto.{OperationLog, Subagents.Continuation, Subagents.Journal}
   alias Alto.Runner.Budget.Account
-  alias Zekkyou.{Config, Service, Tasks}
+  alias Zekkyou.{Config, Service}
 
   def ledger(name \\ Service), do: Service.component(name, :parent_runs)
   def budgets(name \\ Service), do: Service.component(name, :task_budgets)
@@ -26,9 +26,8 @@ defmodule Zekkyou.ParentRuns do
     )
   end
 
-  def options(config, name, payload, approval_resume?) do
-    with {:ok, opts} <- Tasks.resolve(config, "scheduled/" <> payload["profile"]),
-         :ok <- matches_binding(opts, payload["parent_store"]) do
+  def options(opts, name, payload, approval_resume?) when is_list(opts) do
+    with :ok <- matches_binding(opts, payload["parent_store"]) do
       case Keyword.get(opts, :continuation_store) do
         nil ->
           {:ok, []}
@@ -56,6 +55,8 @@ defmodule Zekkyou.ParentRuns do
       nil -> nil
       {:error, reason} -> %{state: "unavailable", reason: reason}
     end
+  catch
+    :exit, reason -> %{state: "unavailable", reason: {:parent_store_unavailable, reason}}
   end
 
   def recoverable(config, profile, id, requested, binding) do
@@ -122,6 +123,8 @@ defmodule Zekkyou.ParentRuns do
       nil -> {:ok, nil}
       store -> OperationLog.identity(store)
     end
+  catch
+    :exit, reason -> {:error, {:parent_store_unavailable, reason}}
   end
 
   defp matches_binding(opts, expected) do
@@ -202,5 +205,7 @@ defmodule Zekkyou.ParentRuns do
       {:ok, values} -> {:ok, Enum.max_by(values, & &1.operation_seq)}
       error -> error
     end
+  catch
+    :exit, reason -> {:error, {:parent_store_unavailable, reason}}
   end
 end

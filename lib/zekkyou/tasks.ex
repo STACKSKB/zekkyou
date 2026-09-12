@@ -441,7 +441,9 @@ defmodule Zekkyou.Tasks do
     approval_resume? =
       is_integer(grant) and recovered.revision == grant + 1 and decision in ["approve", "deny"]
 
-    with {:ok, extra} <- Zekkyou.ParentRuns.options(config, name, payload, approval_resume?) do
+    with {:ok, profile_options} <- resolve(config, "scheduled/" <> payload["profile"]),
+         {:ok, extra} <-
+           Zekkyou.ParentRuns.options(profile_options, name, payload, approval_resume?) do
       opts = [owner: self()] ++ extra
 
       opts =
