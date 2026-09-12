@@ -23,7 +23,7 @@ defmodule Zekkyou.ChildRuns do
   def ledger(name \\ Service), do: Service.component(name, :child_runs)
 
   def commands(name) do
-    Map.new(~w(list get result), fn action ->
+    Map.new(~w(list get result approval), fn action ->
       {"children." <> action, fn args -> execute(ledger(name), action, args) end}
     end)
   end
@@ -52,12 +52,46 @@ defmodule Zekkyou.ChildRuns do
 
   defp execute(ledger, "get", %{"key" => key}) when is_binary(key) do
     with {:ok, snapshot} <- read(ledger, key) do
-      children = Enum.map(snapshot.packet["children"], &Map.drop(&1, ["result"]))
+      children =
+        Enum.map(snapshot.packet["children"], fn child ->
+          child
+          |> Map.drop(["result", "suspension"])
+          |> Map.put("suspension", get_in(child, ["suspension", "token"]))
+        end)
 
       {:ok,
        summary(key, snapshot)
        |> Map.put(:metadata, snapshot.packet["metadata"])
        |> Map.put(:children, children)}
+    end
+  end
+
+  defp execute(ledger, "approval", %{
+         "key" => key,
+         "child" => id,
+         "generation" => generation,
+         "revision" => revision
+       })
+       when is_binary(key) and is_binary(id) and is_binary(generation) and
+              byte_size(generation) > 0 and is_integer(revision) and revision > 0 do
+    with {:ok, batch} <- Journal.restore(ledger, %{"key" => key, "generation" => generation}),
+         {:ok, before} <- Journal.read(batch),
+         :ok <- viewed(before, generation, revision),
+         {:ok, suspended} <- Journal.suspended(batch),
+         child when not is_nil(child) <- Enum.find(suspended, &(&1.id == id)),
+         {:ok, after_read} <- Journal.read(batch),
+         :ok <- viewed(after_read, generation, revision) do
+      {:ok,
+       %{
+         identity: child.identity,
+         revision: revision,
+         state: child.state,
+         decision: child.decision,
+         request: child.checkpoint["request"]
+       }}
+    else
+      nil -> {:error, :child_approval_not_found}
+      {:error, _} = error -> error
     end
   end
 

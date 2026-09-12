@@ -8,7 +8,8 @@ defmodule Zekkyou.Team do
   Optional durable mailboxes use host-derived execution identities.
   An optional Alto workspace manager assigns independent coding checkouts.
   An optional Alto child journal retains dispatch and join results.
-  Independent child checkpoints remain pending.
+  Opted-in durable teams can independently suspend child approvals and resume
+  them through the resident task recovery policy.
   """
 
   @worker_keys [:provider, :tools, :model_tools, :max_steps, :loop, :system_prompt]

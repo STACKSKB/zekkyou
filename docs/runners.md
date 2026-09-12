@@ -58,8 +58,18 @@ saved frame without repeating the plan or children. The claimed frame is a
 single-use grant for downstream effects. See [team recovery](teams.md) and the
 [`task-recover` command](tasks.md).
 
+Durable child approvals retain their own checkpoint and suspension identity.
+The parent restores a decided child only after validating its configuration,
+authority, shared account, workspace revision and absolute expiry. A distinct
+single-use grant prevents a losing concurrent attempt from completing the
+winner's journal or overwriting its transcript. The team loop resolves named
+worker providers from trusted configuration; custom loops with provider
+overrides need Alto's `resolve_child_provider/2` callback and stable profile keys.
+Explicit terminal-task cleanup uses Alto's retirement APIs and preserves a
+durable plan until all consumed resources have been retired.
+
 The service and terminal dependency declarations and lockfiles pin Alto
-`f71d574a46e33011be288b2f38ee6e03231f4680`. This commit is currently local and
+`3195d2153dcaca3b17e16e7aef8ac86721e98c8a`. This commit is currently local and
 unpublished, on `codex/parent-continuations` in the normal Alto checkout. Set
 `ALTO_PATH=/absolute/path/to/alto` to that checkout for a fresh build until
 publication; the override applies to both packages. Qualify persisted state

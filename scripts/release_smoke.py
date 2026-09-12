@@ -17,6 +17,8 @@ import time
 from pathlib import Path
 
 import checkpoint_smoke
+import child_suspension_smoke
+import team_child_suspension_smoke
 import smoke
 import team_smoke
 import workspace_smoke
@@ -179,6 +181,10 @@ def main(archive):
             child_recovery_smoke.main(runner="stepped")
             parent_recovery_smoke.main()
             parent_recovery_smoke.main(runner="stepped")
+            child_suspension_smoke.main()
+            child_suspension_smoke.main(runner="stepped")
+            team_child_suspension_smoke.main()
+            team_child_suspension_smoke.main(runner="stepped")
             workspace_smoke.main()
             patch_integration_smoke.main()
             budget_smoke.main()

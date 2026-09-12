@@ -20,9 +20,12 @@ defmodule Zekkyou.Tasks do
     do: GenServer.call(Service.component(name, :tasks), {operation, payload}, 10_000)
 
   def commands(name) do
-    Map.new(~w(submit list get cancel reconcile decide recover), fn operation ->
-      {"tasks." <> operation, fn payload -> command(name, operation, payload) end}
-    end)
+    Map.new(
+      ~w(submit list get cancel reconcile decide recover child_decide cleanup),
+      fn operation ->
+        {"tasks." <> operation, fn payload -> command(name, operation, payload) end}
+      end
+    )
   end
 
   def children(config, name) do
@@ -121,6 +124,7 @@ defmodule Zekkyou.Tasks do
     reply =
       with {:ok, task} <- validate_submission(payload, state.config),
            :no_intent <- OperationLog.status(state.ledger, task["id"]),
+           :ok <- Zekkyou.Lifecycle.available?(state.config, state.name, task),
            {:ok, _} <-
              Queue.admit(state.queue, task["id"], task, not_before_ms: task["not_before_ms"]) do
         {:ok, %{"task_id" => task["id"], "status" => "queued"}}
@@ -190,6 +194,46 @@ defmodule Zekkyou.Tasks do
            "note" => "Resume exact retained parent continuation",
            :parent_recovery => true
          }},
+        from,
+        state
+      )
+    else
+      false -> {:reply, {:error, :stale_revision}, state}
+      {:error, _} = error -> {:reply, error, state}
+    end
+  end
+
+  def handle_call({"cleanup", %{"id" => id, "revision" => revision}}, _from, state)
+      when is_binary(id) and is_integer(revision) and revision > 0 do
+    reply =
+      with nil <- state.active[id],
+           {:error, :not_found} <- find_record(state, id),
+           {:ok, recovered} <- OperationLog.recovery(state.ledger, id),
+           true <- recovered.revision == revision,
+           {:decided, class, _} when class not in [:unknown, :requires_operator] <-
+             recovered.status do
+        Zekkyou.Lifecycle.cleanup(state.config, state.name, recovered)
+      else
+        false -> {:error, :stale_revision}
+        {:error, :not_found} -> Zekkyou.Lifecycle.resume(state.config, state.name, id, revision)
+        {:error, _} = error -> error
+        _ -> {:error, :task_not_terminal}
+      end
+
+    {:reply, reply, state}
+  end
+
+  def handle_call({"child_decide", %{"id" => id, "revision" => revision} = request}, from, state)
+      when is_binary(id) and is_integer(revision) and revision > 0 do
+    with :ok <- may_reconcile(state, id),
+         {:ok, recovered} <- OperationLog.recovery(state.ledger, id),
+         true <- recovered.revision == revision,
+         {:ok, parent_request} <-
+           Zekkyou.ParentRuns.decide_child(state.config, recovered.recovery[:payload], request) do
+      # The exact decision is durable even if queue admission subsequently fails.
+      # task-recover can then readmit it; it cannot approve a different suspension.
+      handle_call(
+        {"recover", Map.merge(parent_request, %{"id" => id, "revision" => revision})},
         from,
         state
       )

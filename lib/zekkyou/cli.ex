@@ -21,6 +21,8 @@ defmodule Zekkyou.CLI do
   zekkyou task-cancel ID [--socket PATH]
   zekkyou task-reconcile ID committed|failed|retry --revision N --note TEXT [--socket PATH]
   zekkyou task-decide ID approve|deny --revision N [--socket PATH]
+  zekkyou task-child-decide TASK CHILD approve|deny --revision TASK_REV --generation BATCH_GEN --batch-revision BATCH_REV --attempt ATTEMPT --suspension NONCE --key BATCH_KEY [--socket PATH]
+  zekkyou task-cleanup TASK --revision TASK_REV [--socket PATH]
   zekkyou task-recover ID KEY --revision TASK_REV --generation G --continuation-revision CELL_REV [--socket PATH]
   zekkyou mailbox-compact [--socket PATH]
   zekkyou mailbox ROOT_RUN_ID [--cursor N] [--socket PATH]
@@ -33,6 +35,7 @@ defmodule Zekkyou.CLI do
   zekkyou team-batches [--cursor N] [--socket PATH]
   zekkyou team-batch KEY [--socket PATH]
   zekkyou team-result KEY CHILD --generation G --revision N [--cursor N] [--socket PATH]
+  zekkyou team-child-approval KEY CHILD --generation G --revision N [--socket PATH]
 
   Serve owns execution. Closing status/watch clients does not stop agents.
   Configuration is trusted Elixir code. Use SSH socket forwarding for remote access.
@@ -61,8 +64,12 @@ defmodule Zekkyou.CLI do
           id: :string,
           revision: :integer,
           continuation_revision: :integer,
+          batch_revision: :integer,
           note: :string,
-          generation: :string
+          generation: :string,
+          attempt: :string,
+          suspension: :string,
+          key: :string
         ]
       )
 
@@ -201,6 +208,23 @@ defmodule Zekkyou.CLI do
     end
   end
 
+  defp command(["team-child-approval", key, child], opts) do
+    generation = Keyword.get(opts, :generation)
+    revision = Keyword.get(opts, :revision)
+
+    if nonempty?(generation) and positive?(revision) do
+      {:ok,
+       command_wire("children.approval", %{
+         "key" => key,
+         "child" => child,
+         "generation" => generation,
+         "revision" => revision
+       })}
+    else
+      {:error, :team_child_approval_requires_generation_and_revision}
+    end
+  end
+
   defp command(["mailbox", root], opts),
     do:
       {:ok,
@@ -261,6 +285,45 @@ defmodule Zekkyou.CLI do
   defp command(["task-decide", _id, _decision], _opts),
     do: {:error, {:invalid_task_decide, :decision}}
 
+  defp command(["task-child-decide", task, child, decision], opts)
+       when decision in ["approve", "deny"] do
+    revision = Keyword.get(opts, :revision)
+    batch_revision = Keyword.get(opts, :batch_revision)
+    generation = Keyword.get(opts, :generation)
+    attempt = Keyword.get(opts, :attempt)
+    suspension = Keyword.get(opts, :suspension)
+    key = Keyword.get(opts, :key)
+
+    if positive?(revision) and positive?(batch_revision) and nonempty?(generation) and
+         nonempty?(attempt) and nonempty?(suspension) and nonempty?(key) do
+      {:ok,
+       command_wire("tasks.child_decide", %{
+         "id" => task,
+         "child" => child,
+         "decision" => decision,
+         "revision" => revision,
+         "generation" => generation,
+         "batch_revision" => batch_revision,
+         "attempt" => attempt,
+         "suspension" => suspension,
+         "key" => key
+       })}
+    else
+      {:error, :invalid_task_child_decide}
+    end
+  end
+
+  defp command(["task-child-decide", _task, _child, _decision], _opts),
+    do: {:error, {:invalid_task_child_decide, :decision}}
+
+  defp command(["task-cleanup", task], opts) do
+    revision = Keyword.get(opts, :revision)
+
+    if positive?(revision),
+      do: {:ok, command_wire("tasks.cleanup", %{"id" => task, "revision" => revision})},
+      else: {:error, :task_cleanup_requires_revision}
+  end
+
   defp command(["task-recover", id, key], opts) do
     revision = Keyword.get(opts, :revision)
     generation = Keyword.get(opts, :generation)
@@ -299,6 +362,9 @@ defmodule Zekkyou.CLI do
 
   defp maybe_put(payload, _key, nil), do: payload
   defp maybe_put(payload, key, value), do: Map.put(payload, key, value)
+
+  defp positive?(value), do: is_integer(value) and value > 0
+  defp nonempty?(value), do: is_binary(value) and String.trim(value) != ""
 
   defp connect(opts) do
     path = Keyword.get(opts, :socket, Path.join(Config.default_state_dir(), "service.sock"))

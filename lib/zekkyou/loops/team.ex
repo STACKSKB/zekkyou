@@ -74,6 +74,15 @@ defmodule Zekkyou.Loops.Team do
 
   def load_checkpoint(_checkpoint, _spec), do: {:error, :invalid_team_checkpoint}
 
+  @doc "Resolve a saved worker name from the current trusted profile."
+  @impl true
+  def resolve_child_provider(profile, spec) do
+    case Map.fetch(Keyword.fetch!(spec.driver_options, :workers), profile) do
+      {:ok, options} -> {:ok, Keyword.get(options, :provider)}
+      :error -> {:error, :unknown_profile}
+    end
+  end
+
   defp decode_plan(message) when is_binary(message) and byte_size(message) <= 1_000_000 do
     case JSON.decode(message) do
       {:ok, %{"agents" => agents} = plan} when map_size(plan) == 1 and is_list(agents) ->
@@ -115,8 +124,11 @@ defmodule Zekkyou.Loops.Team do
        when map_size(agent) == 3 and is_binary(id) and byte_size(id) in 1..100 and
               is_binary(profile) and is_binary(task) and byte_size(task) in 1..32_000 do
     case Map.fetch(workers, profile) do
-      {:ok, options} -> {:ok, Map.merge(Map.new(options), %{id: id, task: task})}
-      :error -> {:error, :unknown_profile}
+      {:ok, options} ->
+        {:ok, Map.merge(Map.new(options), %{id: id, task: task, profile_key: profile})}
+
+      :error ->
+        {:error, :unknown_profile}
     end
   end
 

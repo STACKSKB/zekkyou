@@ -11,6 +11,7 @@ defmodule Zekkyou.Runtime.Alto do
     stores ++
       Zekkyou.ParentRuns.children(config, name) ++
       [
+        Zekkyou.Lifecycle.child(config, name),
         Zekkyou.Mailbox.child(config, name),
         Zekkyou.Workspaces.child(config, name),
         Zekkyou.ChildRuns.child(config, name)

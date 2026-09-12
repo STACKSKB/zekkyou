@@ -1,7 +1,7 @@
 # Development checkpoint — 2026-09-10
 
 Current Alto source: local, unpublished commit
-`f71d574a46e33011be288b2f38ee6e03231f4680`, pinned in both the service and
+`3195d2153dcaca3b17e16e7aef8ac86721e98c8a`, pinned in both the service and
 terminal dependency declarations and lockfiles. Fresh builds need `ALTO_PATH`
 until publication. The sections below retain earlier development checkpoints;
 the latest parent-continuation validation is recorded at the end.
@@ -417,3 +417,61 @@ deadline. Independently suspended children, coordinated active-time accounting
 and explicit lifecycle retirement remain pending. Claimed continuations,
 acknowledged journals and count accounts remain retained and may exhaust their
 configured bounds. No source or release was pushed or published.
+
+## Independent child approvals and lifecycle cleanup — 2026-09-12
+
+Alto `3195d21` retains each child's exact approval checkpoint, explicit decision and
+single-use resume grant in its journal. Parent recovery processes decided
+children through the existing bounded batch coordinator. Undecided siblings
+stay suspended; uncertain dispatched or claimed work is never silently repeated.
+Separate and shared transcript ownership, workspace revisions, authority limits,
+shared durable counts and absolute expiry remain fenced during restore. Named
+worker providers resolve from the current trusted loop callback instead of
+embedding resolved provider options in the child checkpoint.
+
+Alto retirement commit `8289512` makes claimed-continuation retirement and budget
+closure restartable. Zekkyou adds `team-child-approval`, `task-child-decide` and
+`task-cleanup`. Cleanup saves its complete plan before making any resource
+evictable, can finish after the original task record is evicted, and never closes
+an explicitly shared profile account. Task admission refuses retained IDs so a
+new generation cannot inherit an old continuation or budget.
+
+The new four-VM CLI qualification passes for Serial and Stepped: two siblings
+suspend, one is approved using its original prepared input after that input
+changes, the other is denied after another restart, and integration runs once.
+Cleanup retires the consumed batch and remains idempotent in a fourth VM.
+
+- **853 Alto tests** pass, including concurrent child grants, losing-attempt
+  transcript protection, repeated child suspension, exact sibling decisions,
+  shared/separate sessions, workspace revision checks, absolute expiry and prompt
+  cancellation of resumed children. Named provider tests rotate credentials
+  without retaining them in the saved child profile. Production compilation with
+  warnings as errors, formatting and diff whitespace checks pass.
+- **98 service tests** pass (seed 975008). Ten lifecycle tests cover interrupted
+  cleanup after task eviction, store and generation fences, replacement records,
+  task ID reuse protection, account-only roots with no child journal, external
+  account ownership, and refusal to retire unconsumed work. Four CLI tests cover
+  invalid child decision, inspection and cleanup arguments.
+- The named-team variant also passes across four fresh VMs under both runners,
+  exercising Zekkyou's actual worker profile resolver and model-driven child
+  approvals. The CLI checks reject stale task decisions without changing the
+  child journal. These tests use deterministic local providers, not paid calls.
+- **13 terminal tests** pass. Service and terminal production builds pass with
+  warnings as errors against the pinned Git checkouts. The unpublished Alto
+  objects were imported locally; fresh external builds still need `ALTO_PATH`.
+- The **full relocated bundled-release suite passes**, including the new
+  independent and named-provider child approval/cleanup scenarios under both
+  runners, existing parent recovery, uncertain child dispatch, cross-runner root
+  approvals, mailboxes, isolated workspaces, reviewed patch integration, shared
+  budgets and shutdown/restart behavior. System Erlang, Elixir and Mix are absent
+  from the installed archive's execution environment.
+
+This is explicit approval-boundary recovery, not arbitrary process suspension.
+Clock time while stopped still consumes the original absolute deadline;
+coordinated pausable active-time accounting remains future work. Cleanup covers
+consumed journals, claimed parent cells and task-owned accounts. Pending,
+unconsumed and uncertain resources remain protected for reconciliation.
+Transcripts, workspace patches and mailbox contents retain their own lifecycle.
+Retirement releases retained-operation capacity when terminal records are evicted;
+it does not compact append-only audit logs or remove their byte limits.
+No changes have been pushed or published.

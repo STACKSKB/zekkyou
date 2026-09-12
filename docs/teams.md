@@ -87,7 +87,7 @@ This option persists count limits only. Root approval pauses keep their existing
 active-time semantics. A parent continuation has an absolute expiry, so downtime
 counts against its deadline. Counts are not token or currency limits. A parent
 continuation's account remains retained after the parent frame is claimed;
-automatic retirement is future work.
+explicit terminal-task cleanup closes accounts owned by the task.
 
 Results return in assignment order and enter the lead's bounded conversation as
 `alto_subagent_results`. Token usage includes descendant usage; the result's
@@ -165,13 +165,22 @@ ordered results with `join/1`. Results stay retained until that host durably
 saves its consuming continuation, acknowledges the viewed revision with
 `acknowledge/3`, then explicitly calls `retire/2`. The parent continuation path
 acknowledges the completed join before claiming its post-join frame. It leaves
-the acknowledged journal and claimed parent cell retained; automatic retirement
-is future work.
+the acknowledged journal and claimed parent cell retained until `task-cleanup`.
 A dispatched worker without a saved result remains uncertain and cannot be
 silently rerun. Journal limits can reject retention; Alto preserves uncertainty
 and reports persistence failure rather than inventing a successful join. Exact
 result decoding uses Alto's portable codec; result atoms require their trusted
 defining modules to be loaded in the consuming VM.
+
+If a child has its own durable approval suspension, resolve it with
+`task-child-decide` using the exact task and batch identities reported by the
+service. The decision is persisted before the parent is readmitted. Sibling
+states stay in the same retained batch, and the decision never replans or
+redispatches a child. The parent continuation has an absolute expiry that
+includes service downtime. Use `task-cleanup` only after the task is terminal;
+it retires consumed journals, claimed continuations, and accounts owned by the
+task through a durable restartable manifest. Pending, uncertain, and
+unconsumed records are protected, and externally shared accounts are untouched.
 
 The resident service exposes read-only inspection for its child journal through
 `team-batches`, `team-batch KEY`, and `team-result KEY CHILD --generation G
@@ -184,6 +193,11 @@ resume a batch. A completed child means only that an exact outcome was retained;
 that outcome may be an error or `unknown`. A dispatched child without a retained
 outcome remains uncertain and must not be silently rerun. A batch's `active`
 state describes retained, unretired storage; it does not prove a worker is alive.
+
+For a child approval, inspect the batch identity and state first, then use
+`team-child-approval KEY CHILD --generation G --revision N` to read the exact
+prepared request. Resolve it with `task-child-decide` using the returned fences;
+the inspection command is read-only and does not grant approval or resume work.
 
 Concatenate result `chunk` strings in cursor order and verify `bytes` and
 `sha256` against that complete ASCII base64 string. The encoding is Alto's
@@ -208,18 +222,26 @@ Workers share the configured workspace unless the team receives an optional
 Git checkout and captures a frozen patch without changing the source. The
 supplied example gives workers inspection tools and reserves file editing for
 the lead. [Reviewed patch integration](workspaces.md) is available for coding
-teams; independent child recovery remains pending, so milestone 5 is not complete.
-Neither mailbox durability nor separate session history makes child execution
-independently recoverable. A crash during active delegation parks the containing
+teams. Independent child approvals require the durable journal, shared account
+and parent continuation described above. Neither mailbox durability nor separate
+session history alone authorizes recovery. A crash during active delegation parks the containing
 durable task for operator review. Once every child has a retained result, an
 operator can resume the parent at its saved continuation with
 `task-recover ID KEY --revision TASK_REV --generation G
 --continuation-revision CELL_REV`. An incomplete dispatched child stays pending
 and cannot be restarted by this command. See [scheduled task recovery](tasks.md).
-Checkpoint approvals inside an independently active child are not supported;
-use supported approval policies for workers and keep durable checkpointed
-integration in the lead. Live provider/model quality and cost have not been
-qualified by the local deterministic tests.
+Checkpoint approvals inside these durable children can be resumed independently;
+the worker loop must support checkpoint dump/load. An isolated worker retains
+its exact worked workspace revision during suspension and freezes its patch
+after completion. A changed workspace revision refuses resume. Named provider
+overrides are resolved through the team's trusted worker configuration, while
+inherited providers come from the current parent. Live provider/model quality
+and cost have not been qualified by the local deterministic tests.
+
+If child checkpoint validation fails after a workspace has been reopened, its
+workspace record can advance or freeze even though no child effect was granted.
+Inspect and reconcile that workspace before another recovery attempt; changing
+code or trusted configuration is not a transparent retry boundary.
 
 `python3 -B scripts/team_smoke.py` (after `mix escript.build`) verifies the
 complete team/approval flow across three fresh service VMs, including final

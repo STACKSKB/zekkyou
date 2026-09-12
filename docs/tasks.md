@@ -13,6 +13,8 @@ zekkyou task-cancel ID
 zekkyou task-reconcile ID committed|failed|retry --revision N --note TEXT
 zekkyou task-decide ID approve|deny --revision N
 zekkyou task-recover ID KEY --revision TASK_REV --generation G --continuation-revision CELL_REV
+zekkyou task-child-decide TASK CHILD approve|deny --revision TASK_REV --generation BATCH_GEN --batch-revision BATCH_REV --attempt ATTEMPT --suspension NONCE --key BATCH_KEY
+zekkyou task-cleanup TASK --revision TASK_REV
 ```
 
 Scheduling is bounded in the trusted service configuration. For example:
@@ -93,8 +95,9 @@ zekkyou task-recover TASK_ID CELL_KEY --revision TASK_REV --generation CELL_GENE
 ```
 
 This command accepts only a parked task and the exact current task and cell
-revisions. Every child must have a retained result, or the parent frame must
-already be ready. It readmits the saved parent frame to integrate results and
+revisions. Every child must have a retained result, the parent frame must
+already be ready, or a child must have an explicit saved approval decision.
+It readmits the saved parent frame to resume decided children, integrate results and
 continue; it does not rerun the model's plan or dispatch a child again. A
 missing, pending-child, claimed, or mismatched continuation is refused. A task
 with a parent continuation cannot use generic `task-reconcile ... retry` as a
@@ -105,8 +108,38 @@ Recovery does not approve a tool. Suspended tool approvals continue to use
 `task-decide` and their own saved decision. Parent continuations carry an
 absolute expiry; time spent stopped counts against the run deadline. The
 acknowledged child journal, claimed parent cell, and budget account remain
-retained after recovery. Automatic retirement and independent child suspension
-are future work.
+retained after recovery until explicit terminal-task cleanup.
+
+When a child reaches a durable approval boundary, use `task-child-decide` with
+the exact task revision, batch generation and revision, child attempt, suspension
+nonce, and batch key obtained through `task`, `team-batch` and
+`team-child-approval`. For example:
+
+```text
+zekkyou team-child-approval BATCH_KEY CHILD --generation BATCH_GEN --revision BATCH_REV
+zekkyou task-child-decide TASK CHILD approve --revision TASK_REV --key BATCH_KEY --generation BATCH_GEN --batch-revision BATCH_REV --attempt ATTEMPT --suspension NONCE
+```
+
+The service fences every
+identity, records the child decision durably, and only then readmits the parent
+continuation. Sibling states remain retained; approval does not replan or
+redispatch any child. The continuation's absolute expiry includes downtime, so
+stopping the service does not extend its deadline.
+
+Use `task-cleanup TASK --revision TASK_REV` only for a terminal task after
+reviewing its retained state. Cleanup retires consumed child journals, claimed
+parent continuations, and the task's owned durable account through a restartable
+manifest. Pending, uncertain, or unconsumed records remain protected. Accounts
+shared externally are never retired by task cleanup. Ordinary root approvals
+continue using `task-decide`.
+If cleanup is interrupted, repeat the same command and task revision. Its
+durable plan survives even if the task record is later evicted. Store replacement
+or a different task generation cannot redirect that plan. Retired records become
+eligible for bounded ledger eviction; cleanup does not delete transcripts, worker
+patches, or mailbox messages. A task ID remains unavailable for reuse while its
+old continuation, owned account, or cleanup record is retained.
+Retirement does not compact the append-only operation audit logs; their configured
+byte limits still apply.
 
 The `scheduled/` profile prefix is reserved internally. Retention is bounded:
 completed task identities can eventually be evicted; an idempotency key is not
@@ -141,7 +174,8 @@ file can invalidate a saved prepared write even after approval.
 Alto's shipped Default, Chat and Rule loops support explicit checkpoint
 reconstruction. Custom loops need the same callbacks. Checkpoints reject live
 process capabilities, unsupported data and changed loop/tool fingerprints;
-child runs do not independently suspend a shared parent. Provider credentials
+Child approvals in opted-in durable batches have their own retained checkpoints
+and single-use grants. Provider credentials
 are re-resolved on the host, while exact messages and prepared tool data remain
 in private state. This is an explicit continuation contract, not arbitrary
 process serialization. Existing Socket approvals retain their live-wait policy.

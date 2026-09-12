@@ -108,8 +108,9 @@ recovery, integration and review with the lead agent. Hosted CI is out of scope.
   records are implemented. Zekkyou teams can opt in with a trusted journal server.
 - Zekkyou migrated to published Alto `3bcec285537c5ab44d301a43737fc9d0b8351a7a`,
   including the durable-host additions and independent Serial/Stepped runners.
-  The current pin is local, unpublished `f71d574a46e33011be288b2f38ee6e03231f4680`
-  with parent continuations; fresh builds need `ALTO_PATH` until publication.
+  The current pin is local, unpublished `3195d2153dcaca3b17e16e7aef8ac86721e98c8a`
+  with parent/child continuations and retirement; fresh builds need `ALTO_PATH`
+  until publication.
   Runtime policies stay in Zekkyou.
   Earlier `.work/alto` and durable-host checkouts are historical development state.
 - TUI implementation: optional `packages/zekkyou_tui` client reuses Alto's
@@ -157,8 +158,9 @@ recovery, integration and review with the lead agent. Hosted CI is out of scope.
   A transient local systemd unit passes automatic crash restart, delayed execution,
   history/task recovery after another restart, and complete shutdown. No persistent
   unit was installed or enabled. Remote-host qualification remains outstanding.
-  Custom loops must declare serializable continuations; arbitrary live state and
-  independently suspended child runs are not supported by this checkpoint path.
+  Custom loops must declare serializable continuations; arbitrary live state
+  cannot be serialized. The separate child checkpoint contract below extends
+  recovery to opted-in durable child approvals.
 - Milestone 5 is partially implemented: named worker profiles let the lead plan
   independent assignments, select configured worker models, run bounded parallel
   children and integrate their ordered results through Alto's default tool loop.
@@ -209,14 +211,17 @@ recovery, integration and review with the lead agent. Hosted CI is out of scope.
   can be inspected independently. Retained journals and opted-in parent
   continuations now preserve dispatch and joins across parent death. Fresh-VM
   checks recover the parent and child histories exactly.
-- Milestone 5 still needs independent child lifecycle/recovery. A workspace resource is not an independently resumable child job. The full integration
-  gate remains outstanding.
+- Milestone 5 now includes independently suspended child approvals. A retained
+  child checkpoint and journal grant authorize exact recovery; a workspace
+  resource or saved conversation alone does not.
 - Alto's durable effect/model-count accounts are implemented. Trusted Zekkyou
   profiles can supply an account; restored budgets reconnect to its current
   counters instead of cloning a snapshot. Continuation-enabled durable tasks
   now create or reuse a per-task account. Default task budgets retain their
-  existing behavior. Coordinated retirement and active time across independently
-  suspended children remain pending.
+  existing behavior. Explicit terminal-task cleanup retires consumed journals,
+  claimed parent cells and owned accounts through a restartable durable plan.
+  Coordinated pausable active time across suspended children remains pending;
+  parent and child continuations conservatively charge downtime to absolute expiry.
 - Independent child lifecycle/recovery is the active milestone again as of
   2026-09-12. The resident runtime now supervises an opt-in Alto child journal;
   operators can list batch states and export exact results using generation and
@@ -230,10 +235,15 @@ recovery, integration and review with the lead agent. Hosted CI is out of scope.
   `task-recover` policy. Three fresh service VMs qualify one plan, one child
   execution and one integration under both shipped runners. Incomplete batches
   remain parked; generic retry cannot bypass the saved continuation.
-- Next shared-runtime implementation: independently suspended child checkpoints,
-  coordinated active-time accounting and explicit journal/continuation/budget
-  retirement. Automatic recovery policy remains pending. Remote qualification
-  follows when a host is available.
+- Independent child checkpoints now retain exact prepared approvals, sibling
+  states and shared count budgets. `task-child-decide` persists an explicit
+  decision before parent readmission; a separate per-attempt grant protects
+  each resumed child from concurrent or repeated execution. Named worker
+  providers resolve from trusted configuration. Uncertain in-flight work stays
+  parked. Alto owns suspension, grants and resource retirement; Zekkyou owns
+  operator decisions, task terminality and coordinated cleanup policy.
+- Next shared-runtime work: coordinated pausable active-time accounting and
+  automatic recovery policy. Remote qualification follows when a host is available.
 - Recovery now restores queued work and explicitly approved checkpoints; uncertain
   dispatched effects remain parked for operator reconciliation. Durable agent
   coordination, memory/skills and messaging adapters remain pending.
@@ -241,5 +251,5 @@ recovery, integration and review with the lead agent. Hosted CI is out of scope.
   A subsequent requested migration adopts Alto's published runner refactor,
   manager-owned workspace source/digest contracts, and explicit old-state upgrade
   handling. Work resumed with resident child evidence recovery and exact parent
-  continuations. Independently suspended children and later milestones remain
-  unfinished.
+  continuations, then independent child approvals and lifecycle cleanup.
+  Later milestones remain unfinished.

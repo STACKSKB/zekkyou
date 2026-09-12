@@ -10,8 +10,9 @@ Development is in progress; this is not yet the unattended-operation release.
 ## Development
 
 The dependency and lockfiles pin Alto commit
-`f71d574a46e33011be288b2f38ee6e03231f4680`, which adds exact parent-batch
-continuations to the durable-host mechanisms and Serial/Stepped runners.
+`3195d2153dcaca3b17e16e7aef8ac86721e98c8a`, which includes exact parent-batch
+continuations, independent child approvals and explicit resource retirement
+for the Serial/Stepped runners.
 This commit is currently local and unpublished. Until publication, build with
 an Alto checkout at that commit (locally, `codex/parent-continuations`):
 
@@ -59,7 +60,10 @@ independent patches and retain interrupted resources for review. The
 checkouts, then has the lead review and request durable approval for patch
 application. The team profile can also recover a completed child batch from
 the lead's exact saved continuation through `task-recover`, without repeating
-the plan or workers. Independent child recovery remains roadmap work.
+the plan or workers. Children can suspend independently for approval; inspect
+their exact requests with `team-child-approval` and decide with
+`task-child-decide`. Terminal tasks can retire consumed execution records with
+`task-cleanup`.
 
 ## Run a resident service
 

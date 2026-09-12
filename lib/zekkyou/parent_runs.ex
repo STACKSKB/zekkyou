@@ -80,6 +80,43 @@ defmodule Zekkyou.ParentRuns do
     end
   end
 
+  def decide_child(config, payload, requested) do
+    with {:ok, opts} <- Config.resolve(config, payload["profile"]),
+         :ok <- matches_binding(opts, payload["parent_store"]),
+         store when not is_nil(store) <- Keyword.get(opts, :continuation_store),
+         {:ok, candidate} when not is_nil(candidate) <-
+           latest(store, payload["id"]),
+         true <- candidate.phase == :pending,
+         {:ok, cell} <-
+           Continuation.restore(store, candidate.identity),
+         {:ok, snapshot} <- Continuation.read(cell),
+         binding = %{"key" => requested["key"], "generation" => requested["generation"]},
+         true <- binding == snapshot.metadata["journal"],
+         %{subagents: %{journal: journal}} when not is_nil(journal) <- Keyword.get(opts, :loop),
+         {:ok, batch} <- Journal.restore(journal, binding),
+         identity = %{
+           "journal" => binding,
+           "id" => requested["child"],
+           "attempt" => requested["attempt"],
+           "suspension" => requested["suspension"]
+         },
+         decision when decision in [:approve, :deny] <-
+           %{"approve" => :approve, "deny" => :deny}[requested["decision"]],
+         {:ok, _} <- Journal.decide(batch, requested["batch_revision"], identity, decision) do
+      {:ok,
+       %{
+         "key" => candidate.identity["key"],
+         "generation" => candidate.identity["generation"],
+         "continuation_revision" => candidate.revision
+       }}
+    else
+      false -> {:error, :stale_or_mismatched_child_continuation}
+      {:ok, nil} -> {:error, :parent_continuation_not_found}
+      {:error, _} = error -> error
+      _ -> {:error, :invalid_child_decision}
+    end
+  end
+
   def store_binding(opts) do
     case Keyword.get(opts, :continuation_store) do
       nil -> {:ok, nil}
@@ -103,9 +140,15 @@ defmodule Zekkyou.ParentRuns do
          {:ok, saved} <- Journal.read(batch) do
       # Admission inspection precedes loading the runner's result vocabulary.
       # The runner validates/decodes the exact join before granting effects.
-      case Enum.find(saved.packet["children"], &(&1["state"] != "completed")) do
-        nil -> :ok
-        child -> {:error, {:child_pending, child["id"], child["state"]}}
+      children = saved.packet["children"]
+
+      if Enum.any?(children, &(&1["state"] == "decided")) do
+        :ok
+      else
+        case Enum.find(children, &(&1["state"] != "completed")) do
+          nil -> :ok
+          child -> {:error, {:child_pending, child["id"], child["state"]}}
+        end
       end
     end
   end
