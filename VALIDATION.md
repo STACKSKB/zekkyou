@@ -1,10 +1,10 @@
 # Development checkpoint — 2026-09-10
 
 Current Alto source: published commit
-`6f4182083d13d49dfdce8014896041bb8809a690`, pinned in both the service and
+`f554634445c66bc56e5d656da973f7910c2f90a9`, pinned in both the service and
 terminal dependency declarations and lockfiles. Fresh builds use the Git
 dependency directly. The sections below retain earlier development checkpoints;
-the latest recovery audit validation is recorded at the end.
+the latest validation is recorded at the end.
 
 ## Automated checks
 
@@ -530,3 +530,26 @@ dependency pin changed. Earlier notes about unpublished objects describe the
 validation environment at that time. Fresh builds now fetch the pinned Git
 revision without requiring `ALTO_PATH`; that override remains optional for
 local development. Zekkyou itself has not been pushed by this task.
+
+## TUI selection and clipboard — 2026-09-16
+
+Published Alto `f554634445c66bc56e5d656da973f7910c2f90a9` adds a shared
+selection layer over the final rendered screen and OSC 52 clipboard output.
+Zekkyou uses that layer for every visible pane, enables mouse reporting, and
+routes bracketed/system clipboard paste to the sanitized composer without
+submitting. Ctrl+C copies an active selection before the normal detach action;
+Escape clears selection and resize discards stale coordinates.
+
+Both dependency declarations and lockfiles now pin that published revision.
+Validation with no `ALTO_PATH` override:
+
+- Service: `mix test` — 105 tests passed.
+- Terminal client: `mix test` — 16 tests passed, including every-pane copying,
+  local-copy paste fallback, sanitized system paste, resize and Escape behavior.
+- Upstream Alto: full suite — 872 tests passed; final TUI suite — 45 tests passed.
+  TUI checks cover Unicode cell widths, reverse drags, frozen streaming views,
+  masked popup fields, and selecting approval labels without activating them.
+
+System clipboard writes require terminal OSC 52 support; native Shift+drag and
+terminal copy remain available. Ctrl+V reads the local clipboard when a helper
+is available, otherwise it pastes the last selection copied inside the client.

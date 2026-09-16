@@ -10,9 +10,9 @@ Development is in progress; this is not yet the unattended-operation release.
 ## Development
 
 The dependency and lockfiles pin Alto commit
-`6f4182083d13d49dfdce8014896041bb8809a690`, which includes exact parent-batch
+`f554634445c66bc56e5d656da973f7910c2f90a9`, which includes exact parent-batch
 continuations, independent child approvals and explicit resource retirement
-for the Serial/Stepped runners.
+for the Serial/Stepped runners, plus shared TUI screen selection and clipboard support.
 This commit is published on Alto’s `main` branch for the `0.0.1` release.
 Build directly from the pinned Git dependency:
 
@@ -135,6 +135,16 @@ Ctrl+N starts a new task, Ctrl+K requests cancellation, Ctrl+A approves the
 shown decision, and Ctrl+D denies it. For a task requiring operator review,
 inspect its evidence and enter `/retry NOTE`, `/committed NOTE`, or `/failed NOTE`
 in the composer. Decisions are revision-fenced across clients. Ctrl+Q detaches.
+Drag anywhere in the TUI to select visible text, including task rows, details,
+composer text, and status. Ctrl+C or Alt+C copies the selection; Esc clears it.
+Ctrl+Shift+A selects the visible screen when the terminal forwards that chord.
+Selection holds the displayed frame still while the service continues running.
+Copy uses OSC 52, so the terminal must allow clipboard writes; Shift+drag with
+native terminal copy is an alternative. Paste with the terminal's usual shortcut
+(often Ctrl+Shift+V or Cmd+V), or Ctrl+V with a local clipboard helper (`wl-paste`,
+`xclip`, `xsel`, `pbpaste`). Without a helper, Ctrl+V pastes the last TUI copy.
+Paste focuses the composer and never submits automatically.
+
 Ctrl+R reconnects after
 a connection failure. Failed sends are never retried automatically; inspect
 recovered task state before resending when delivery is uncertain.

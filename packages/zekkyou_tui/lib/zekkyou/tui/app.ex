@@ -2,7 +2,8 @@ defmodule Zekkyou.TUI.App do
   @moduledoc "Terminal client for the independently owned Zekkyou service."
   use ExRatatui.App
 
-  alias ExRatatui.Event.{Key, Paste}
+  alias ExRatatui.Event.{Key, Paste, Resize}
+  alias Alto.TUI.{Clipboard, Selection}
   alias ExRatatui.Layout.Rect
   alias Zekkyou.TUI.View
 
@@ -20,24 +21,92 @@ defmodule Zekkyou.TUI.App do
        focus: :composer,
        scroll: 0,
        pending: nil,
-       submitted_draft: nil
+       submitted_draft: nil,
+       dimensions: Keyword.get(opts, :test_mode) || terminal_dimensions(),
+       selection: Selection.new(),
+       clipboard_text: nil,
+       clipboard_write:
+         Keyword.get(
+           opts,
+           :clipboard_write,
+           if(opts[:test_mode], do: fn _ -> :ok end, else: &Clipboard.write/1)
+         ),
+       clipboard_read: Keyword.get(opts, :clipboard_read, &Clipboard.read/0)
      }}
   end
 
   @impl true
   def render(state, frame) do
     view = Map.merge(state.model, %{draft: state.draft, focus: state.focus, scroll: state.scroll})
-    View.widgets(view, %Rect{width: frame.width, height: frame.height})
+
+    Selection.widgets(
+      state.selection,
+      View.widgets(view, %Rect{width: frame.width, height: frame.height})
+    )
   end
 
   @impl true
-  def handle_event(%Key{kind: "release"}, state), do: {:noreply, state}
-  def handle_event(%Key{} = event, state), do: key(event, state)
+  def handle_event(event, state) do
+    {width, height} = state.dimensions
+    view = Map.merge(state.model, %{draft: state.draft, focus: state.focus, scroll: state.scroll})
+    widgets = fn -> View.widgets(view, %Rect{width: width, height: height}) end
 
-  def handle_event(%Paste{content: text}, %{focus: :composer} = state),
-    do: {:noreply, append_draft(state, text)}
+    case Selection.event(state.selection, event, state.dimensions, widgets) do
+      {:pass, selection} ->
+        route_event(event, %{state | selection: selection})
 
-  def handle_event(_event, state), do: {:noreply, state}
+      {:handled, selection} ->
+        {:noreply, %{state | selection: selection}}
+
+      {:click, _mouse, selection} ->
+        {:noreply, %{state | selection: selection}}
+
+      {:copy, text, selection} ->
+        result = state.clipboard_write.(text)
+
+        notice =
+          if result == :ok,
+            do: "Copied selection",
+            else: "Clipboard unavailable; Ctrl+V pastes copy"
+
+        {:noreply,
+         %{
+           state
+           | selection: selection,
+             clipboard_text: text,
+             model: Map.put(state.model, :notice, notice)
+         }}
+    end
+  end
+
+  defp route_event(%Resize{width: width, height: height}, state),
+    do: {:noreply, %{state | dimensions: {width, height}}}
+
+  defp route_event(%Key{kind: "release"}, state), do: {:noreply, state}
+
+  defp route_event(%Key{code: "v", modifiers: ["ctrl"]}, state) do
+    content =
+      case state.clipboard_read.() do
+        {:ok, text} -> text
+        _ -> state.clipboard_text
+      end
+
+    if content == nil,
+      do:
+        {:noreply,
+         %{
+           state
+           | model: Map.put(state.model, :notice, "Paste with your terminal's paste shortcut")
+         }},
+      else: route_event(%Paste{content: content}, state)
+  end
+
+  defp route_event(%Key{} = event, state), do: key(event, state)
+
+  defp route_event(%Paste{content: text}, state),
+    do: {:noreply, append_draft(%{state | focus: :composer, selection: Selection.new()}, text)}
+
+  defp route_event(_event, state), do: {:noreply, state}
 
   defp key(%Key{code: code, modifiers: mods}, state) do
     cond do
@@ -146,6 +215,13 @@ defmodule Zekkyou.TUI.App do
         else: nil
 
     {:noreply, %{state | pending: task, submitted_draft: submitted_draft}}
+  end
+
+  defp terminal_dimensions do
+    case ExRatatui.terminal_size() do
+      {width, height} when is_integer(width) and is_integer(height) -> {width, height}
+      _ -> {120, 36}
+    end
   end
 
   defp next_focus(:composer), do: :tasks

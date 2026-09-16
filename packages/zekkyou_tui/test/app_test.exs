@@ -1,6 +1,6 @@
 defmodule Zekkyou.TUI.AppTest do
   use ExUnit.Case, async: true
-  alias ExRatatui.Event.{Key, Paste}
+  alias ExRatatui.Event.{Key, Mouse, Paste, Resize}
   alias Zekkyou.TUI.App
 
   defmodule Console do
@@ -35,6 +35,98 @@ defmodule Zekkyou.TUI.AppTest do
 
     def perform(model, _, _), do: model
     def close(_), do: :ok
+  end
+
+  test "selects and copies every visible pane using the shared Alto selection layer" do
+    owner = self()
+
+    {:ok, state} =
+      App.mount(
+        console_module: Console,
+        test_mode: {140, 40},
+        clipboard_write: fn text ->
+          send(owner, {:clipboard, text})
+          :ok
+        end,
+        clipboard_read: fn -> {:error, :unavailable} end
+      )
+
+    state = %{
+      state
+      | model: Map.merge(state.model, %{detail: "task detail", notice: "ready"}),
+        draft: "draft text"
+    }
+
+    geometry = Alto.TUI.Layout.calculate(140, 40)
+
+    for rect <- [
+          geometry.rail,
+          geometry.transcript,
+          geometry.details,
+          geometry.composer,
+          geometry.settings,
+          geometry.status
+        ] do
+      {:noreply, pressed} =
+        App.handle_event(%Mouse{kind: "down", button: "left", x: rect.x, y: rect.y}, state)
+
+      {:noreply, selected} =
+        App.handle_event(
+          %Mouse{kind: "up", button: "left", x: rect.x + rect.width - 1, y: rect.y},
+          pressed
+        )
+
+      assert selected.selection.active?
+      text = Alto.TUI.Selection.text(selected.selection)
+      assert text != ""
+      {:noreply, copied} = App.handle_event(%Key{code: "c", modifiers: ["ctrl"]}, selected)
+      assert_receive {:clipboard, ^text}
+      assert copied.pending == nil
+      assert copied.clipboard_text == text
+      refute copied.selection.active?
+    end
+
+    {:noreply, pasted} =
+      App.handle_event(%Key{code: "v", modifiers: ["ctrl"]}, %{
+        state
+        | focus: :tasks,
+          clipboard_text: "\n猫"
+      })
+
+    assert pasted.focus == :composer
+    assert pasted.draft == "draft text\n猫"
+    assert pasted.pending == nil
+    assert {:stop, _} = App.handle_event(%Key{code: "c", modifiers: ["ctrl"]}, pasted)
+  end
+
+  test "system clipboard and bracketed paste use sanitized draft input from any focus" do
+    {:ok, state} =
+      App.mount(
+        console_module: Console,
+        test_mode: {80, 24},
+        clipboard_read: fn -> {:ok, "clipboard\e"} end
+      )
+
+    {:noreply, state} =
+      App.handle_event(%Key{code: "v", modifiers: ["ctrl"]}, %{state | focus: :tasks})
+
+    assert state.draft == "clipboard"
+    {:noreply, state} = App.handle_event(%Paste{content: "\nmultiline"}, %{state | focus: :tasks})
+    assert state.draft == "clipboard\nmultiline"
+    assert state.focus == :composer
+    assert state.pending == nil
+  end
+
+  test "Escape clears selection before client commands and resize clears stale coordinates" do
+    {:ok, state} = App.mount(console_module: Console, test_mode: {80, 24})
+    {:noreply, selected} = App.handle_event(%Key{code: "a", modifiers: ["ctrl", "shift"]}, state)
+    assert selected.selection.active?
+    assert selected.pending == nil
+    {:noreply, cleared} = App.handle_event(%Key{code: "esc"}, selected)
+    refute cleared.selection.active?
+    {:noreply, resized} = App.handle_event(%Resize{width: 50, height: 20}, selected)
+    assert resized.dimensions == {50, 20}
+    refute resized.selection.active?
   end
 
   test "quit only acts on press; control keys and named keys never become text" do

@@ -8,6 +8,8 @@ defmodule Zekkyou.TUI.CLI do
   Tab focuses tasks or composer; arrows select tasks; Enter sends a message.
   Ctrl+Q detaches, Ctrl+R reconnects, Ctrl+N starts a new task, Ctrl+K cancels.
   Ctrl+A approves the displayed request, Ctrl+D denies. Page Up/Down scroll.
+  Drag anywhere to select; Ctrl+C or Alt+C copies; Esc clears selection.
+  Ctrl+Shift+A selects the visible screen. Use terminal paste or Ctrl+V to paste.
   """
 
   def main(argv) do
@@ -74,7 +76,11 @@ defmodule Zekkyou.TUI.CLI do
   end
 
   defp start(opts) do
-    case Zekkyou.TUI.App.start_link(Keyword.put(opts, :name, nil)) do
+    case Zekkyou.TUI.App.start_link(
+           opts
+           |> Keyword.put(:name, nil)
+           |> Keyword.put(:mouse_capture, true)
+         ) do
       {:ok, pid} ->
         Process.unlink(pid)
         ref = Process.monitor(pid)
