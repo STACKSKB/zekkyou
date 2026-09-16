@@ -98,8 +98,12 @@ defmodule Zekkyou.ProjectsTest do
 
   test "console completes directories on the service host without registering them", ctx do
     model = Console.perform(Console.new(socket: Config.socket_path(ctx.config)), :connect, self())
-    assert {:ok, folders} = Console.complete_folders(model, "sec")
+
+    assert {:ok, %{folders: folders, completion: completion}} =
+             Console.complete_folders(model, "sec")
+
     assert folders == [ctx.folder <> "/"]
+    assert completion == ctx.folder <> "/"
     assert {:error, _} = Console.complete_folders(model, "bad\npath")
     assert model.selected_id == nil
     assert model.workspace_root == ctx.root

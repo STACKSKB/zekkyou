@@ -10,7 +10,7 @@ Development is in progress; this is not yet the unattended-operation release.
 ## Development
 
 The dependency and lockfiles pin Alto commit
-`3e5a9422ca2a635f5d8412eea2676d26752e9b73`, which includes exact parent-batch
+`d05c400a4e3b04a013cc4f8a1291b31599a9a660`, which includes exact parent-batch
 continuations, independent child approvals and explicit resource retirement
 for the Serial/Stepped runners, plus shared TUI screen selection, clipboard support,
 and the folder workspace dialog.
@@ -142,8 +142,11 @@ in the composer. Decisions are revision-fenced across clients. Ctrl+Q detaches.
 Press **Ctrl+G, N** or click **+ New task** to start in the current folder.
 Use **Ctrl+G, W** to open another existing folder. Enter a path on the **service host**; relative paths start at
 its configured default workspace, and `~` uses the service account's home.
-Up/Down highlights folder suggestions; Tab completes the highlighted path and
-lists subfolders. Suggestions come from the service host, including over SSH.
+Tab extends the typed path to the longest common prefix of matching folders and
+lists the next matches: `/hom` becomes `/home/`, regardless of saved workspaces.
+Up/Down followed by Tab accepts a specific folder. Saved folders appear only with
+empty input. Suggestions come from the service host, including over SSH; a Tab
+pressed while they load is applied when the response arrives.
 Opening a workspace preserves your draft and prepares a new task. The details
 pane shows the full working folder. Workspaces and queued folder choices survive
 service restart; existing tasks and resumed conversations retain their original

@@ -30,6 +30,7 @@ defmodule Zekkyou.TUI.AppTest do
     def perform(model, {:submit, _}, _), do: Map.put(model, :notice, "Sent")
     def perform(model, _, _), do: model
     def close(_), do: :ok
+    def complete_folders(_, _), do: {:ok, []}
   end
 
   defmodule ParkedConsole do
@@ -243,6 +244,39 @@ defmodule Zekkyou.TUI.AppTest do
 
     assert {:noreply, ^state} =
              App.handle_info({:workspace_suggestions, revision, {:ok, ["/old/"]}}, state)
+  end
+
+  test "Tab waits for service suggestions and requests children after completing a prefix" do
+    {:ok, state} = App.mount(console_module: Console, test_mode: {140, 40})
+    {:noreply, state} = App.handle_event(%Key{code: "g", modifiers: ["ctrl"]}, state)
+    {:noreply, state} = App.handle_event(%Key{code: "w"}, state)
+    {:noreply, state} = App.handle_event(%Paste{content: "/hom"}, state)
+    revision = state.workspace_form.revision
+    {:noreply, state} = App.handle_event(%Key{code: "tab"}, state)
+    assert state.workspace_form.revision == revision
+    assert Alto.TUI.WorkspaceForm.path(state.workspace_form) == "/hom"
+
+    {:noreply, state} =
+      App.handle_info(
+        {:workspace_suggestions, revision, {:ok, %{folders: ["/home/"], completion: "/home/"}}},
+        state
+      )
+
+    assert Alto.TUI.WorkspaceForm.path(state.workspace_form) == "/home/"
+    next = state.workspace_form.revision
+    assert next != revision
+    assert_receive {:complete_workspace, ^next}, 500
+
+    {:noreply, state} =
+      App.handle_info(
+        {:workspace_suggestions, next,
+         {:ok, %{folders: ["/home/alice/", "/home/bob/"], completion: "/home/"}}},
+        state
+      )
+
+    assert state.workspace_form.suggestions == ["/home/alice/", "/home/bob/"]
+    {:noreply, state} = App.handle_event(%Key{code: "tab"}, state)
+    assert Alto.TUI.WorkspaceForm.path(state.workspace_form) == "/home/"
   end
 
   test "Ctrl+G N creates a task in the existing folder without a workspace form" do

@@ -1,7 +1,7 @@
 # Development checkpoint — 2026-09-10
 
 Current Alto source: published commit
-`3e5a9422ca2a635f5d8412eea2676d26752e9b73`, pinned in both the service and
+`d05c400a4e3b04a013cc4f8a1291b31599a9a660`, pinned in both the service and
 terminal dependency declarations and lockfiles. Fresh builds use the Git
 dependency directly. The sections below retain earlier development checkpoints;
 the latest validation is recorded at the end.
@@ -798,3 +798,29 @@ API references used for the adapter contracts:
 [Anthropic effort](https://platform.claude.com/docs/en/build-with-claude/effort).
 
 Restart the service and both terminal clients to load these changes.
+
+## Folder prefix completion — 2026-09-16
+
+Published Alto `d05c400a4e3b04a013cc4f8a1291b31599a9a660` and pinned both
+service and TUI dependencies to it. Tab now extends the typed path to the longest
+common prefix of matching directories. `/hom` completes to `/home/` and lists
+its folders; saved workspaces cannot override typed prefixes. Explicit arrow-key
+or mouse choices still accept a specific folder. Empty input retains saved-folder
+shortcuts without automatically completing to the working directory.
+
+The service sends a prefix computed from every match while returning at most
+50 display suggestions. Remote Tab presses wait for the current response and
+trigger a child-directory refresh after completion; edits invalidate pending
+completion. Existing stale-response checks remain in place.
+
+Validation:
+
+- Alto TUI suite: 92 tests passed, covering saved-workspace precedence, ambiguous
+  and Unicode prefixes, nonexistent paths, more than 50 matches, and remote Tab.
+- Zekkyou service suite: 110 tests passed against the published dependency.
+- Zekkyou TUI suite: 29 tests passed against the published dependencies, including
+  queued Tab and the follow-up directory refresh.
+- Formatting and whitespace checks passed; dependency lockfile changes only
+  update the Alto and Alto TUI revisions.
+
+Restart the service and terminal clients to load the fix.

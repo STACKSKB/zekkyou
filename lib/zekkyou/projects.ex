@@ -11,8 +11,7 @@ defmodule Zekkyou.Projects do
       end,
       "projects.complete" => fn
         %{"path" => path} ->
-          with {:ok, folders} <- Alto.Harness.Folders.complete(path, config.workspace),
-               do: {:ok, %{folders: folders}}
+          Alto.Harness.Folders.suggest(path, config.workspace)
 
         _ ->
           {:error, :invalid_workspace_path}

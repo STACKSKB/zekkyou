@@ -384,7 +384,7 @@ defmodule Zekkyou.TUI.App do
         {:workspace_suggestions, revision, result},
         %{workspace_form: %{revision: revision} = form} = state
       ),
-      do: {:noreply, %{state | workspace_form: WorkspaceForm.suggest(form, result)}}
+      do: workspace_result(state, {:edit, WorkspaceForm.suggest(form, result)})
 
   def handle_info({:workspace_suggestions, _revision, _result}, state), do: {:noreply, state}
 

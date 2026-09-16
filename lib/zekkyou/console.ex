@@ -53,7 +53,9 @@ defmodule Zekkyou.Console do
     reply =
       request(model.client, %{type: "command", name: "projects.complete", payload: %{path: path}})
 
-    {:ok, reply["folders"] || []}
+    folders = reply["folders"] || []
+    completion = Map.get(reply, "completion", Alto.Harness.Folders.common_prefix(folders))
+    {:ok, %{folders: folders, completion: completion}}
   catch
     {:console, reason} -> {:error, reason}
     :exit, reason -> {:error, reason}
