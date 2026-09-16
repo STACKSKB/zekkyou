@@ -92,7 +92,7 @@ defmodule Zekkyou.TUI.View do
           {%Paragraph{
              text: if(detail == "", do: "No task selected.", else: detail),
              wrap: true,
-             block: panel("Details")
+             block: panel(if(approval(state), do: "Approval required", else: "Details"))
            }, geometry.details}
         ]
       else
@@ -130,7 +130,7 @@ defmodule Zekkyou.TUI.View do
 
   def selection_content(state, width, height) do
     layout = Layout.calculate(width, height)
-    detail? = Map.get(state, :detail, "") not in [nil, ""]
+    detail? = approval(state) != nil or Map.get(state, :detail, "") not in [nil, ""]
     tasks? = layout.rail == nil and Map.get(state, :focus) == :tasks
 
     transcript =
@@ -155,7 +155,12 @@ defmodule Zekkyou.TUI.View do
     }
 
   defp conversation_text(state, geometry) do
-    text = transcript_text(Map.get(state, :entries, [])) <> compact_detail(state, geometry)
+    transcript = transcript_text(Map.get(state, :entries, []))
+
+    text =
+      if geometry.details == nil and approval(state),
+        do: "Approval required\n\n" <> detail_text(state) <> "\n\n" <> transcript,
+        else: transcript <> compact_detail(state, geometry)
 
     if String.trim(text) == "",
       do: "No messages yet. Start a conversation with the composer below.",
@@ -178,6 +183,45 @@ defmodule Zekkyou.TUI.View do
   # Workspace commands already live in the task rail and status bar. Keep the
   # context body as data so ordinary selection does not copy those controls.
   defp detail_text(state) do
+    case approval(state) do
+      nil -> ordinary_detail(state)
+      request -> Alto.TUI.ApprovalView.text(request)
+    end
+  end
+
+  @doc "The same authoritative approval snapshot that the console's decision targets."
+  def approval(state) do
+    task =
+      Enum.find(Map.get(state, :tasks, []), &(Map.get(&1, :id) == Map.get(state, :selected_id)))
+
+    case task do
+      %{upgrade_required: reason} when is_binary(reason) ->
+        nil
+
+      %{status: "waiting_approval", approval: request} when is_map(request) ->
+        request
+
+      %{run_id: run} when not is_nil(run) ->
+        state
+        |> Map.get(:approvals, %{})
+        |> Map.values()
+        |> Enum.filter(&(Map.get(&1, "run_id") == run))
+        |> Enum.sort_by(&Map.get(&1, "id"))
+        |> Elixir.List.first()
+
+      _ ->
+        nil
+    end
+  end
+
+  def approval_key(state) do
+    case approval(state) do
+      nil -> nil
+      request -> Map.get(request, "id") || Map.get(request, :id) || request
+    end
+  end
+
+  defp ordinary_detail(state) do
     detail = Map.get(state, :detail, "") |> to_string_or_empty()
 
     case detail do

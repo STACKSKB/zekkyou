@@ -1,7 +1,7 @@
 # Development checkpoint — 2026-09-10
 
 Current Alto source: published commit
-`4914e0ff444dcdfb5776a9ed38aefa7dddd0acb2`, pinned in both the service and
+`3e33c0ee10428d61894d97514a22c8c4d8fc9a87`, pinned in both the service and
 terminal dependency declarations and lockfiles. Fresh builds use the Git
 dependency directly. The sections below retain earlier development checkpoints;
 the latest validation is recorded at the end.
@@ -644,3 +644,44 @@ Validation:
 
 Relaunch the TUI to use the new renderer and menu. Terminal fonts have one cell
 size; the shortcut uses a lighter, dimmed style rather than a separate font size.
+
+
+## 2026-09-16 — readable approvals and faster selection bursts
+
+Published Alto `3e33c0ee10428d61894d97514a22c8c4d8fc9a87` supplies the shared
+approval formatter and faster selection renderer. Both declarations and lockfiles
+pin that revision. Commands show prepared argv, folder, reason and execution
+limits; file operations and generic tools use readable labels. Original approval
+requests and decisions are unchanged.
+
+Alto resets context scroll and clears a frozen selection when the active approval
+changes, including advancing the queue. Zekkyou similarly reveals newly active
+approvals, places them before transcript history in narrow layouts, and preserves
+the user's scroll position during refreshes of the same approval. Its service
+refresh timer now uses a distinct message instead of colliding with the terminal
+runtime's internal poll message.
+
+Selection caches full-row geometry and text indexes, slices only boundary rows,
+and applies highlight colors without redrawing text. Consecutive drag events
+coalesce to the latest position, preserving releases, copy keys, resize events
+and other mailbox messages. An out-and-back drag cannot activate an approval
+button even when intermediate positions were coalesced.
+
+Validation:
+
+- Alto TUI: 69 tests passed, covering readable native/remote requests, approval
+  visibility in wide/narrow layouts and queue transitions, event ordering,
+  Unicode, reverse drags and click safety.
+- Zekkyou TUI: 22 tests passed with published Git dependencies and no `ALTO_PATH`,
+  including a real runtime timer test and approval visibility in both layouts.
+- At 400×120, median selection event plus native draw fell from 8.7 ms to 3.5 ms
+  (p95 13.5 ms to 4.4 ms); highlight calculation fell from 3.8 ms to 0.011 ms.
+  A burst of 200 pending drag motions rendered once in 5.9 ms. At 240×70,
+  median drag time was 1.4 ms; at 160×50 it was 0.75 ms.
+- These benchmark results exclude terminal-emulator latency. One-time mouse-down
+  capture still costs about 89 ms at 400×120 (23 ms at 240×70); the improvements
+  primarily target sustained dragging and rapid reversals. Host load varies.
+- Formatting and whitespace checks passed. Service/runtime suites were not rerun
+  for these terminal-only changes.
+
+Relaunch both terminal clients to load the fixes.

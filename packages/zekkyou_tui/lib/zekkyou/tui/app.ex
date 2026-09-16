@@ -11,7 +11,7 @@ defmodule Zekkyou.TUI.App do
   def mount(opts) do
     console = Keyword.get(opts, :console_module, Zekkyou.Console)
     send(self(), :connect)
-    Process.send_after(self(), :poll, 500)
+    Process.send_after(self(), :zekkyou_poll, 500)
 
     {:ok,
      %{
@@ -25,6 +25,7 @@ defmodule Zekkyou.TUI.App do
        submitted_draft: nil,
        dimensions: Keyword.get(opts, :test_mode) || terminal_dimensions(),
        selection: Selection.new(),
+       drag_poll: Alto.TUI.DragInput.poller(opts),
        clipboard_text: nil,
        clipboard_write:
          Keyword.get(
@@ -54,6 +55,7 @@ defmodule Zekkyou.TUI.App do
 
   @impl true
   def handle_event(event, state) do
+    event = Alto.TUI.DragInput.latest(event, state.drag_poll)
     {width, height} = state.dimensions
 
     view =
@@ -193,6 +195,8 @@ defmodule Zekkyou.TUI.App do
   end
 
   @impl true
+  def handle_info({:tui_deferred_input, event}, state), do: handle_event(event, state)
+
   def handle_info({ref, {model, action}}, %{pending: %Task{ref: ref}} = state) do
     Process.demonitor(ref, [:flush])
 
@@ -212,10 +216,13 @@ defmodule Zekkyou.TUI.App do
           state.draft
       end
 
+    approval_changed? = View.approval_key(state.model) != View.approval_key(model)
+
     scroll =
-      if action == :new or match?({:workspace, _}, action) or match?({:select, _}, action),
-        do: 0,
-        else: state.scroll
+      if approval_changed? or action == :new or match?({:workspace, _}, action) or
+           match?({:select, _}, action),
+         do: 0,
+         else: state.scroll
 
     form =
       if match?({:workspace, _}, action) and state.workspace_form do
@@ -234,9 +241,14 @@ defmodule Zekkyou.TUI.App do
          pending: nil,
          submitted_draft: nil,
          scroll: scroll,
+         selection: if(approval_changed?, do: Selection.new(), else: state.selection),
          workspace_form: form,
          focus:
-           if(match?({:workspace, _}, action) and is_nil(form), do: :composer, else: state.focus)
+           cond do
+             approval_changed? and View.approval(model) != nil -> :composer
+             match?({:workspace, _}, action) and is_nil(form) -> :composer
+             true -> state.focus
+           end
      }}
   end
 
@@ -249,8 +261,8 @@ defmodule Zekkyou.TUI.App do
 
   def handle_info(:connect, state), do: dispatch(state, :connect)
 
-  def handle_info(:poll, state) do
-    Process.send_after(self(), :poll, 500)
+  def handle_info(:zekkyou_poll, state) do
+    Process.send_after(self(), :zekkyou_poll, 500)
 
     if state.pending || state.model.client == nil,
       do: {:noreply, state},

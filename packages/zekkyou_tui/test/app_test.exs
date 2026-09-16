@@ -48,6 +48,86 @@ defmodule Zekkyou.TUI.AppTest do
     def close(_), do: :ok
   end
 
+  defmodule PollingConsole do
+    def new(opts),
+      do: Console.new(opts) |> Map.put(:client, self()) |> Map.put(:test_owner, opts[:test_owner])
+
+    def perform(model, :poll, _owner) do
+      send(model.test_owner, :service_polled)
+      model
+    end
+
+    def perform(model, _, _owner), do: model
+    def close(_), do: :ok
+  end
+
+  test "service refresh ticks reach the app through the real terminal runtime" do
+    start_supervised!(
+      {App, console_module: PollingConsole, test_owner: self(), test_mode: {140, 40}, name: nil}
+    )
+
+    assert_receive :service_polled, 3_000
+  end
+
+  test "new approval clears stale scroll and selection and is readable in wide and narrow views" do
+    request = %{
+      "id" => "approval-ls",
+      "tool" => "run_command",
+      "arguments" => %{"program" => "ls"},
+      "details" => %{
+        "command" => %{
+          "requested_program" => "ls",
+          "executable" => "/usr/bin/ls",
+          "args" => ["-la"],
+          "cwd" => "/workspace"
+        }
+      }
+    }
+
+    for {width, height} <- [{140, 40}, {70, 24}] do
+      {:ok, state} = App.mount(console_module: Console, test_mode: {width, height})
+
+      task =
+        state.model.tasks |> hd() |> Map.merge(%{status: "waiting_approval", approval: request})
+
+      model =
+        Map.merge(state.model, %{
+          tasks: [task],
+          detail: "%{raw: args}",
+          entries: [%{kind: :assistant, text: String.duplicate("old history\n", 100)}]
+        })
+
+      worker = Task.async(fn -> {model, :poll} end)
+      assert_receive {ref, {^model, :poll}}
+
+      state = %{
+        state
+        | pending: worker,
+          scroll: 500,
+          focus: :tasks,
+          selection: %{Alto.TUI.Selection.new() | active?: true}
+      }
+
+      {:noreply, shown} = App.handle_info({ref, {model, :poll}}, state)
+      assert shown.scroll == 0
+      refute shown.selection.active?
+      terminal = ExRatatui.init_test_terminal(width, height)
+      :ok = ExRatatui.draw(terminal, App.render(shown, %{width: width, height: height}))
+      buffer = ExRatatui.get_buffer_content(terminal)
+      assert buffer =~ "Approval required"
+      assert buffer =~ "ls -la"
+      assert buffer =~ "/workspace"
+      refute buffer =~ "%{raw: args}"
+      worker = Task.async(fn -> {model, :poll} end)
+      assert_receive {ref, {^model, :poll}}
+
+      {:noreply, same} =
+        App.handle_info({ref, {model, :poll}}, %{shown | pending: worker, scroll: 2})
+
+      assert same.scroll == 2
+    end
+  end
+
   test "F7 edits a folder separately from the draft and opens a new workspace" do
     {:ok, state} = App.mount(console_module: Console, test_mode: {140, 40})
     state = %{state | draft: "keep my draft"}

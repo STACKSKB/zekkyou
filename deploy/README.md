@@ -13,7 +13,7 @@ The optional terminal client is packaged separately. It is not included here.
 ## Build and qualify
 
 From the Zekkyou checkout, build against the published Alto commit
-`4914e0ff444dcdfb5776a9ed38aefa7dddd0acb2` pinned in the dependency lockfile.
+`3e33c0ee10428d61894d97514a22c8c4d8fc9a87` pinned in the dependency lockfile.
 No local Alto checkout or path override is required:
 
 ```sh

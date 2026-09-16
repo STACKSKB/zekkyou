@@ -10,7 +10,7 @@ Development is in progress; this is not yet the unattended-operation release.
 ## Development
 
 The dependency and lockfiles pin Alto commit
-`4914e0ff444dcdfb5776a9ed38aefa7dddd0acb2`, which includes exact parent-batch
+`3e33c0ee10428d61894d97514a22c8c4d8fc9a87`, which includes exact parent-batch
 continuations, independent child approvals and explicit resource retirement
 for the Serial/Stepped runners, plus shared TUI screen selection, clipboard support,
 and the folder workspace dialog.
@@ -133,8 +133,10 @@ standalone, native-free executable.
 Use `--socket PATH` to select a service. Tab switches between tasks and the
 composer; arrows select tasks, Enter sends, and Page Up/Down scroll activity.
 Ctrl+N starts a new task, Ctrl+K requests cancellation, Ctrl+A approves the
-shown decision, and Ctrl+D denies it. For a task requiring operator review,
-inspect its evidence and enter `/retry NOTE`, `/committed NOTE`, or `/failed NOTE`
+shown decision, and Ctrl+D denies it. New approvals open at the top of the
+context pane and display readable commands, folders, reasons and execution limits.
+In narrow terminals, the approval appears above conversation history. For a task
+requiring operator review, inspect its evidence and enter `/retry NOTE`, `/committed NOTE`, or `/failed NOTE`
 in the composer. Decisions are revision-fenced across clients. Ctrl+Q detaches.
 Press **F7** or click **+ New workspace** above the task list to open another
 existing folder. Enter a path on the **service host**; relative paths start at
@@ -153,7 +155,8 @@ UI text. **Ctrl+C** or **Alt+C** copies, and **right-click without Shift** opens
 a compact Copy menu with a muted shortcut. Selecting text opens no toolbar or
 popup. Esc dismisses the menu, then clears selection. Ctrl+Shift+A selects visible
 content; adding Alt includes UI text. Dragging reuses a cached screen and updates
-only the highlight while the service continues running.
+only highlight colors while the service continues running. Consecutive mouse
+moves are coalesced to the latest position, so fast drags do not queue stale frames.
 Copy uses `wl-copy`, `xclip`, `xsel`, or `pbcopy` when available, with OSC 52 as a
 fallback. The status distinguishes desktop copies from unconfirmed terminal
 requests. Shift+drag and Shift+right-click belong to the terminal application;
