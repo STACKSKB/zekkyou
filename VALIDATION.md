@@ -1,7 +1,7 @@
 # Development checkpoint — 2026-09-10
 
 Current Alto source: published commit
-`fade95e64689ea511c924db5a6b206cf5416b94e`, pinned in both the service and
+`8feb1000cd105352566f8612425b842fb3014822`, pinned in both the service and
 terminal dependency declarations and lockfiles. Fresh builds use the Git
 dependency directly. The sections below retain earlier development checkpoints;
 the latest validation is recorded at the end.
@@ -978,3 +978,40 @@ Validation:
   Alto and Alto TUI revisions.
 
 Restart the TUIs and Zekkyou service to load the new event and display behavior.
+
+## Markdown report rendering — 2026-09-16
+
+Published Alto `183e890` for the shared report renderer and `8feb100` to retain
+full literal user/reasoning messages. Both Zekkyou dependency declarations and
+lockfiles now pin `8feb1000cd105352566f8612425b842fb3014822`.
+
+Assistant responses use the same Markdown renderer while streaming and when
+reopening stored conversations. Headings/emphasis are styled, code retains
+indentation with syntax coloring, small tables use aligned columns, and long
+or narrow tables use labeled records without dropping evidence. Source messages
+remain unchanged. Selection copies formatted visible text and continues to
+scroll across the complete report. Resize uses the actual pane width.
+
+Finished blocks, table cells and transcript entries are cached. Painting and
+selection snapshots only submit visible styled rows to the native renderer.
+The 240x70 benchmark with 10,000 tool-output lines measured 8–13 ms warm selection
+start, 7–9 ms selection autoscroll, and about 0.1 ms pointer updates. A 120-row
+Markdown report measured about 218 ms for the first layout and 6 ms for a streaming
+update, with cached retrieval below 0.1 ms. These are local application-processing
+measurements, excluding terminal-emulator latency.
+
+Validation:
+
+- Alto full suite: 1,042 tests passed before the final additional edge cases;
+  final TUI suite: 115 tests passed, including 13 report/selection regressions.
+- Zekkyou service: 113 tests passed; the final follow-up only changes Alto TUI.
+- Zekkyou TUI: 37 tests passed with the final published pin and no local override.
+  An earlier local run had a transient temporary-directory cleanup failure;
+  both published-dependency runs passed.
+- Native-cell visual inspection covered a review report with long evidence,
+  a compact summary table, headings, emphasis, code and lists.
+- Compilation with warnings as errors, formatting and whitespace checks passed.
+  Lockfile changes only move the Alto and Alto TUI revisions.
+
+Restart the TUIs to load the new renderer. Existing saved reports are formatted
+on display without rewriting their stored source.

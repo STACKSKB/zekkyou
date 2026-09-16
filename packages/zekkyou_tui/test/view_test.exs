@@ -19,6 +19,44 @@ defmodule Zekkyou.TUI.ViewTest do
     scroll: 0
   }
 
+  test "assistant reports use shared Markdown layout at wide and narrow widths" do
+    source =
+      "## Review\n\n| File | Evidence |\n| --- | --- |\n| `lib/a.ex` | **Confirmed** " <>
+        String.duplicate("long evidence ", 10) <> "|\n\n```elixir\n  :ok\n```"
+
+    state = %{@state | entries: [%{kind: :assistant, text: source}]}
+
+    for width <- [90, 150] do
+      terminal = ExRatatui.CellSession.new(width, 60)
+
+      try do
+        :ok =
+          ExRatatui.CellSession.draw(
+            terminal,
+            View.widgets(state, %Rect{width: width, height: 60})
+          )
+
+        cells = ExRatatui.CellSession.take_cells(terminal).cells
+
+        text =
+          cells
+          |> Enum.chunk_every(width)
+          |> Enum.map_join("\n", fn row -> Enum.map_join(row, & &1.symbol) end)
+
+        assert text =~ "Review"
+        assert text =~ "File: lib/a.ex"
+        assert text =~ "Evidence: Confirmed"
+        assert text =~ "  :ok"
+        refute text =~ "## Review"
+        refute text =~ "**Confirmed**"
+        refute text =~ "```"
+        assert Enum.any?(cells, &(&1.symbol == "R" and :bold in &1.modifiers))
+      after
+        ExRatatui.CellSession.close(terminal)
+      end
+    end
+  end
+
   test "tool rows show targets and multiline applied diffs and git stats" do
     entries =
       Alto.ToolDisplay.transcript([
@@ -195,7 +233,7 @@ defmodule Zekkyou.TUI.ViewTest do
            end) == 1
 
     assert Enum.any?(rendered, fn {%Paragraph{text: text}, _} ->
-             String.contains?(text, "Type a message")
+             is_binary(text) and String.contains?(text, "Type a message")
            end)
   end
 

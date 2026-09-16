@@ -10,7 +10,7 @@ Development is in progress; this is not yet the unattended-operation release.
 ## Development
 
 The dependency and lockfiles pin Alto commit
-`fade95e64689ea511c924db5a6b206cf5416b94e`, which includes exact parent-batch
+`8feb1000cd105352566f8612425b842fb3014822`, which includes exact parent-batch
 continuations, independent child approvals and explicit resource retirement
 for the Serial/Stepped runners, plus shared TUI screen selection, clipboard support,
 and the folder workspace dialog.
@@ -246,3 +246,8 @@ Tool rows identify the file or command, show Git output, and display applied
 edit/write diffs with normal line breaks. Long transcripts use cached wrapping
 for selection and scrolling. Cache diagnostics separate the latest request from
 cumulative usage; OpenRouter requests carry a stable session ID for cache affinity.
+
+Assistant reports in the TUI render as Markdown, including styled headings,
+emphasis, indented syntax-highlighted code, and responsive tables. Small tables
+keep aligned columns; long evidence tables become labeled records. Selection
+copies the visible formatted text, while stored messages retain their Markdown.

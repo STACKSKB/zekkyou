@@ -153,9 +153,11 @@ defmodule Zekkyou.TUI.View do
         []
       end
 
+    conversation = conversation_text(state, geometry)
+
     transcript = %Paragraph{
-      text: conversation_text(state, geometry),
-      wrap: true,
+      text: conversation,
+      wrap: is_binary(conversation),
       scroll:
         {min(
            max(Map.get(state, :scroll, 0), 0),
@@ -327,16 +329,19 @@ defmodule Zekkyou.TUI.View do
     }
 
   defp conversation_text(state, geometry) do
-    transcript = transcript_text(Map.get(state, :entries, []))
+    entries = Map.get(state, :entries, [])
+    detail = if geometry.details == nil, do: detail_text(state), else: ""
 
-    text =
-      if geometry.details == nil and approval(state),
-        do: "Approval required\n\n" <> detail_text(state) <> "\n\n" <> transcript,
-        else: transcript <> compact_detail(state, geometry)
+    entries =
+      cond do
+        detail == "" -> entries
+        approval(state) -> [%{kind: :system, text: "Approval required\n\n" <> detail} | entries]
+        true -> entries ++ [%{kind: :system, text: detail}]
+      end
 
-    if String.trim(text) == "",
+    if entries == [],
       do: "No messages yet. Start a conversation with the composer below.",
-      else: text
+      else: Alto.TUI.Transcript.render(entries, max(geometry.transcript.width - 2, 1), "zekkyou")
   end
 
   defp selected_title(state) do
@@ -345,12 +350,6 @@ defmodule Zekkyou.TUI.View do
       task -> String.slice(task.title, 0, 40)
     end
   end
-
-  defp compact_detail(state, %{details: nil}) do
-    "\n\n" <> detail_text(state)
-  end
-
-  defp compact_detail(_state, _geometry), do: ""
 
   # Workspace commands already live in the task rail and status bar. Keep the
   # context body as data so ordinary selection does not copy those controls.
@@ -414,47 +413,6 @@ defmodule Zekkyou.TUI.View do
     status = task |> Map.get(:status, "") |> to_string_or_empty()
     title = task |> Map.get(:title, "Untitled task") |> to_string_or_empty()
     if status == "", do: title, else: "#{status}  #{title}"
-  end
-
-  defp transcript_text([]), do: ""
-
-  defp transcript_text(entries) do
-    key = {__MODULE__, :transcript_text}
-
-    case Process.get(key) do
-      {^entries, text} ->
-        text
-
-      _ ->
-        text = format_transcript(entries)
-        Process.put(key, {entries, text})
-        text
-    end
-  end
-
-  defp format_transcript(entries) do
-    entries
-    |> Enum.map(fn entry ->
-      kind = entry |> Map.get(:kind, :message) |> to_string_or_empty() |> String.upcase()
-      value = Map.get(entry, :text, "")
-
-      text =
-        case kind do
-          "ERROR" -> Alto.Display.error(value)
-          role when role in ["TOOL", "ACTIVITY"] -> Alto.Display.result(value)
-          _ -> to_string_or_empty(value)
-        end
-
-      detail =
-        case Map.get(entry, :detail) do
-          nil -> ""
-          "" -> ""
-          value -> "\n" <> Alto.ToolDisplay.detail(value)
-        end
-
-      "#{if kind == "REASONING", do: "THINKING", else: kind}: #{text}" <> detail
-    end)
-    |> Enum.join("\n")
   end
 
   defp status_text(%{leader?: true}),
