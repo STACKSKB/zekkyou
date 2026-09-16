@@ -45,7 +45,7 @@ defmodule Zekkyou.TUI.ViewTest do
            end)
 
     assert Enum.any?(rendered, fn
-             {%Paragraph{text: "＋ New workspace · F7"}, _} -> true
+             {%Paragraph{text: "+ New workspace · F7"}, _} -> true
              _ -> false
            end)
   end

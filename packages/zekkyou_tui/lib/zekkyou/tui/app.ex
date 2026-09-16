@@ -102,10 +102,7 @@ defmodule Zekkyou.TUI.App do
       {:copy, text, selection} ->
         result = state.clipboard_write.(text)
 
-        notice =
-          if result == :ok,
-            do: "Copied selection",
-            else: "Clipboard unavailable; Ctrl+V pastes copy"
+        notice = Clipboard.notice(result)
 
         {:noreply,
          %{

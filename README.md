@@ -10,7 +10,7 @@ Development is in progress; this is not yet the unattended-operation release.
 ## Development
 
 The dependency and lockfiles pin Alto commit
-`c2c0d44624dd009e8733234c61e7a38b95ada40e`, which includes exact parent-batch
+`25a9445c53ea1bd1df243f5084c4f3dd6094417f`, which includes exact parent-batch
 continuations, independent child approvals and explicit resource retirement
 for the Serial/Stepped runners, plus shared TUI screen selection, clipboard support,
 and the folder workspace dialog.
@@ -136,7 +136,7 @@ Ctrl+N starts a new task, Ctrl+K requests cancellation, Ctrl+A approves the
 shown decision, and Ctrl+D denies it. For a task requiring operator review,
 inspect its evidence and enter `/retry NOTE`, `/committed NOTE`, or `/failed NOTE`
 in the composer. Decisions are revision-fenced across clients. Ctrl+Q detaches.
-Press **F7** or click **＋ New workspace** above the task list to open another
+Press **F7** or click **+ New workspace** above the task list to open another
 existing folder. Enter a path on the **service host**; relative paths start at
 its configured default workspace, and `~` uses the service account's home.
 Up/Down recalls saved folders in the dialog.
@@ -146,14 +146,19 @@ service restart; existing tasks and resumed conversations retain their original
 folder. An SSH client uses folders on the remote host. Restart the service after
 upgrading to make its workspace commands available.
 
-Drag anywhere in the TUI to select visible text, including task rows, details,
-composer text, and status. Ctrl+C or Alt+C copies the selection; Esc clears it.
+Drag anywhere in the TUI to select visible text. Each drag stays inside its
+starting box, excluding borders and neighboring boxes; titles and controls are
+selectable separately. Click **[ Copy ]** after selecting, press **Ctrl+C** or
+**Alt+C**, or **right-click without Shift** for the Copy menu. Esc clears selection.
 Ctrl+Shift+A selects the visible screen when the terminal forwards that chord.
 Selection holds the displayed frame still while the service continues running.
-Copy uses OSC 52, so the terminal must allow clipboard writes; Shift+drag with
-native terminal copy is an alternative. Paste with the terminal's usual shortcut
-(often Ctrl+Shift+V or Cmd+V), or Ctrl+V with a local clipboard helper (`wl-paste`,
-`xclip`, `xsel`, `pbpaste`). Without a helper, Ctrl+V pastes the last TUI copy.
+Copy uses `wl-copy`, `xclip`, `xsel`, or `pbcopy` when available, with OSC 52 as a
+fallback. The status distinguishes desktop copies from unconfirmed terminal
+requests. Shift+drag and Shift+right-click belong to the terminal application;
+its own copy menu is separate from the TUI's selection. Paste with the terminal's
+usual shortcut (often Ctrl+Shift+V or Cmd+V), or Ctrl+V with a local clipboard
+helper (`wl-paste`, `xclip`, `xsel`, `pbpaste`). Without a helper, Ctrl+V pastes the
+last TUI copy.
 Paste focuses the composer and never submits automatically.
 
 Ctrl+R reconnects after

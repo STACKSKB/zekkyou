@@ -143,6 +143,39 @@ defmodule Zekkyou.TUI.AppTest do
     assert {:stop, _} = App.handle_event(%Key{code: "c", modifiers: ["ctrl"]}, pasted)
   end
 
+  test "box selection excludes neighbors and the Copy menu works without keyboard shortcuts" do
+    owner = self()
+
+    {:ok, state} =
+      App.mount(
+        console_module: Console,
+        test_mode: {140, 40},
+        clipboard_write: fn text ->
+          send(owner, {:clipboard, text})
+          :ok
+        end
+      )
+
+    state = %{state | model: Map.put(state.model, :detail, "first\nsecond")}
+    layout = Alto.TUI.Layout.calculate(140, 40)
+    down = %Mouse{kind: "down", button: "left", x: layout.details.x + 1, y: 1}
+    {:noreply, state} = App.handle_event(down, state)
+    {:noreply, state} = App.handle_event(%{down | kind: "up", x: 0, y: 3}, state)
+    assert Alto.TUI.Selection.text(state.selection) == "first\nsecond\n"
+
+    {:noreply, state} =
+      App.handle_event(%Mouse{kind: "down", button: "right", x: 139, y: 39}, state)
+
+    menu = state.selection.menu
+    down = %{down | x: menu.x + 2, y: menu.y + 1}
+    {:noreply, state} = App.handle_event(down, state)
+    {:noreply, copied} = App.handle_event(%{down | kind: "up"}, state)
+    assert_receive {:clipboard, "first\nsecond\n"}
+    assert copied.model.notice == "Copied selection"
+    refute copied.selection.active?
+    assert copied.pending == nil
+  end
+
   test "system clipboard and bracketed paste use sanitized draft input from any focus" do
     {:ok, state} =
       App.mount(

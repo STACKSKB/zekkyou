@@ -44,7 +44,7 @@ defmodule Zekkyou.TUI.View do
 
         [
           {panel(if(Map.get(state, :focus) == :tasks, do: "Tasks •", else: "Tasks")), rect},
-          {%Paragraph{text: "＋ New workspace · F7"}, %{inner | y: rect.y + 1, height: 1}},
+          {%Paragraph{text: "+ New workspace · F7"}, %{inner | y: rect.y + 1, height: 1}},
           {list, inner}
         ]
       else

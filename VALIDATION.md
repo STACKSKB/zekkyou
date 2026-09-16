@@ -1,7 +1,7 @@
 # Development checkpoint — 2026-09-10
 
 Current Alto source: published commit
-`c2c0d44624dd009e8733234c61e7a38b95ada40e`, pinned in both the service and
+`25a9445c53ea1bd1df243f5084c4f3dd6094417f`, pinned in both the service and
 terminal dependency declarations and lockfiles. Fresh builds use the Git
 dependency directly. The sections below retain earlier development checkpoints;
 the latest validation is recorded at the end.
@@ -579,3 +579,34 @@ Validation:
   queued-folder persistence across restart, and cross-folder resume rejection.
 
 Restart the service after upgrade to expose the new workspace commands.
+
+## 2026-09-16 — bounded text selection and visible Copy actions
+
+Published Alto `25a9445c53ea1bd1df243f5084c4f3dd6094417f` is pinned in
+both dependency declarations and lockfiles. Mouse selection stays within the
+starting widget's content, with borders and controls selectable separately.
+Overlays exclude covered content. A visible Copy button and an unmodified
+right-click Copy menu supplement Ctrl+C and Alt+C. Desktop clipboard writers
+(`wl-copy`, `xclip`, `xsel`, `pbcopy`) precede OSC 52; unacknowledged terminal
+requests are no longer reported as confirmed copies. The workspace action uses
+an ASCII plus to avoid differing full-width glyph behavior between terminals.
+
+Validation:
+
+- Alto TUI: 56 tests passed, including pane clipping, reverse and Unicode drags,
+  overlay exclusion, click safety, Copy controls, and fixed workspace-label cell
+  positions across selection/copy at three viewport widths.
+- Clipboard helpers: exact stdin roundtrip with a test executable, private-file
+  cleanup, helper failures, and OSC 52/tmux fallback are covered by those tests.
+  This does not validate a particular terminal emulator's clipboard permissions.
+- Full Alto suite: 885 tests, two HTTP socket timeout failures, also seen with
+  reduced concurrency. All TUI tests passed. The affected web-listener modules
+  and TUI suite passed together in isolation: 86 tests, zero failures.
+- Zekkyou service: 108 tests passed using the published Git dependency.
+- Zekkyou TUI: 19 tests passed using the published Git dependencies, without
+  `ALTO_PATH`, including pane-confined selection and mouse-driven Copy.
+- Formatting and whitespace checks passed.
+
+Relaunch the terminal client to load the updated code. Shift+right-click remains
+controlled by the terminal emulator; use right-click without Shift for the TUI's
+Copy menu.
