@@ -10,7 +10,7 @@ Development is in progress; this is not yet the unattended-operation release.
 ## Development
 
 The dependency and lockfiles pin Alto commit
-`f1dcffedae3f1033c553621f8fd411a83f45a5ce`, which includes exact parent-batch
+`d5c7de2c99f85f6ab0498de8863eae78ef10e6e8`, which includes exact parent-batch
 continuations, independent child approvals and explicit resource retirement
 for the Serial/Stepped runners, plus shared TUI screen selection, clipboard support,
 and the folder workspace dialog.
@@ -151,7 +151,10 @@ folder. An SSH client uses folders on the remote host. Restart the service after
 upgrading to make its workspace and path-completion commands available.
 
 Drag to select conversation text, context data, your draft, or entered form
-values. Each drag stays inside its starting box. Controls, titles, status bars,
+values. Each drag stays inside its starting box. Hold at the top or bottom edge
+of a conversation/context pane to scroll, or use the wheel while holding the drag.
+Moving farther beyond the edge scrolls faster; moving inside or releasing stops.
+Copy preserves the full selected range, including text now off-screen. Controls, titles, status bars,
 and placeholder hints are excluded by default; **Alt+drag** explicitly opts into
 UI text. **Ctrl+C** or **Alt+C** copies, and **right-click without Shift** opens
 a compact Copy menu with a muted shortcut. Selecting text opens no toolbar or

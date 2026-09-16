@@ -75,13 +75,20 @@ defmodule Zekkyou.TUI.App do
     widgets = fn -> View.widgets(view, %Rect{width: width, height: height}) end
 
     case Selection.event(state.selection, event, state.dimensions, widgets,
-           content: fn -> View.selection_content(view, width, height) end
+           content: fn -> View.selection_content(view, width, height) end,
+           scroll_limit: fn point ->
+             case selection_pane(state, point) do
+               :transcript -> View.scroll_bottom(view, width, height)
+               :details -> View.details_bottom(view, width, height)
+               _ -> nil
+             end
+           end
          ) do
       {:pass, selection} ->
         route_event(event, %{state | selection: selection})
 
       {:handled, selection} ->
-        {:noreply, %{state | selection: selection}}
+        {:noreply, apply_selection_scroll(state, selection)}
 
       {:click, mouse, selection} ->
         state = %{state | selection: selection}
@@ -129,6 +136,35 @@ defmodule Zekkyou.TUI.App do
              clipboard_text: text,
              model: Map.put(state.model, :notice, notice)
          }}
+    end
+  end
+
+  defp selection_pane(%{workspace_form: form}, _) when not is_nil(form), do: nil
+
+  defp selection_pane(state, {x, y}) do
+    {width, height} = state.dimensions
+    layout = Alto.TUI.Layout.calculate(width, height)
+
+    cond do
+      Alto.TUI.Layout.contains?(layout.details, x, y) -> :details
+      Alto.TUI.Layout.contains?(layout.transcript, x, y) -> :transcript
+      true -> nil
+    end
+  end
+
+  defp apply_selection_scroll(state, selection) do
+    state = %{state | selection: selection}
+
+    case Selection.scroll_position(selection) do
+      {point, offset} ->
+        case selection_pane(state, point) do
+          :transcript -> %{state | scroll: offset}
+          :details -> %{state | details_scroll: offset}
+          _ -> state
+        end
+
+      nil ->
+        state
     end
   end
 
@@ -270,6 +306,13 @@ defmodule Zekkyou.TUI.App do
   def handle_info({:workspace_suggestions, _revision, _result}, state), do: {:noreply, state}
 
   def handle_info({:tui_deferred_input, event}, state), do: handle_event(event, state)
+
+  def handle_info({:tui_selection_scroll, token}, state) do
+    case Selection.autoscroll(state.selection, token) do
+      {:scrolled, selection} -> {:noreply, apply_selection_scroll(state, selection)}
+      {:idle, selection} -> {:noreply, %{state | selection: selection}, render?: false}
+    end
+  end
 
   def handle_info({ref, {model, action}}, %{pending: %Task{ref: ref}} = state) do
     Process.demonitor(ref, [:flush])

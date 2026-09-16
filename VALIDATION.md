@@ -1,7 +1,7 @@
 # Development checkpoint — 2026-09-10
 
 Current Alto source: published commit
-`f1dcffedae3f1033c553621f8fd411a83f45a5ce`, pinned in both the service and
+`d5c7de2c99f85f6ab0498de8863eae78ef10e6e8`, pinned in both the service and
 terminal dependency declarations and lockfiles. Fresh builds use the Git
 dependency directly. The sections below retain earlier development checkpoints;
 the latest validation is recorded at the end.
@@ -730,3 +730,27 @@ Validation:
   limited to the Alto / Alto TUI Git revisions.
 
 Restart the TUIs and the Zekkyou service to enable service-host path completion.
+
+## 2026-09-16 — selection autoscroll
+
+Published Alto `d5c7de2c99f85f6ab0498de8863eae78ef10e6e8` adds edge-held
+selection scrolling shared by both terminal clients. Zekkyou handles its scroll
+timers and preserves the resulting conversation/context offsets after copying.
+Both dependency declarations and lockfiles use the published revision.
+
+- Hold the drag at a pane's top/bottom to scroll, or use the wheel while holding.
+  Going farther beyond the edge increases speed. Moving inside, releasing,
+  losing focus or reaching content bounds stops scrolling.
+- Copy includes off-screen rows and stays confined to the originating pane;
+  reversing direction, wrapped text and wide Unicode glyphs are covered.
+- Alto's approval panes and compact drawers scroll without activating controls.
+- Alto TUI: 82 tests passed. Zekkyou TUI: 26 tests passed against the published
+  dependencies without ALTO_PATH. Service/runtime code did not change.
+- Selection event handling plus native draw remained approximately 1.4 ms median
+  at 240×70 and 3.8 ms at 400×120. Those measurements cover pointer motion within
+  the viewport, exclude terminal-emulator latency and vary with host load.
+  Advancing the viewport still requires rendering newly exposed source text.
+- Formatting and whitespace checks passed; dependency lock changes are limited
+  to the Alto and Alto TUI Git revisions.
+
+Restart both TUIs to load this change.

@@ -130,6 +130,47 @@ defmodule Zekkyou.TUI.AppTest do
     end
   end
 
+  test "selection autoscrolls context and transcript and keeps the copied scroll position" do
+    for pane <- [:details, :transcript] do
+      {:ok, state} = App.mount(console_module: Console, test_mode: {140, 40})
+      text = Enum.map_join(0..99, "\n", &"line #{&1}")
+
+      model =
+        if pane == :details,
+          do: Map.put(state.model, :detail, text),
+          else: Map.put(state.model, :entries, [%{kind: :assistant, text: text}])
+
+      state = %{state | model: model}
+      rect = Map.fetch!(Alto.TUI.Layout.calculate(140, 40), pane)
+      down = %Mouse{kind: "down", button: "left", x: rect.x + 1, y: rect.y + 1}
+      {:noreply, state} = App.handle_event(down, state)
+      assert state.selection.scroll != nil
+
+      {:noreply, state} =
+        App.handle_event(
+          %{down | kind: "drag", x: rect.x + rect.width - 2, y: rect.y + rect.height - 1},
+          state
+        )
+
+      before = Alto.TUI.Selection.text(state.selection)
+
+      {:noreply, state} =
+        App.handle_info({:tui_selection_scroll, state.selection.scroll.token}, state)
+
+      key = if pane == :details, do: :details_scroll, else: :scroll
+      assert Map.fetch!(state, key) > 0
+      assert String.starts_with?(Alto.TUI.Selection.text(state.selection), before)
+      token = state.selection.scroll.token
+      {:noreply, copied} = App.handle_event(%Key{code: "c", modifiers: ["ctrl"]}, state)
+      assert copied.clipboard_text =~ "line 0"
+      refute copied.clipboard_text =~ "Ctrl"
+      assert Map.fetch!(copied, key) == Map.fetch!(state, key)
+
+      assert {:noreply, ^copied, render?: false} =
+               App.handle_info({:tui_selection_scroll, token}, copied)
+    end
+  end
+
   test "context scrolling clamps at the last wrapped text row" do
     {:ok, state} = App.mount(console_module: Console, test_mode: {140, 40})
 

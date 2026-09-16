@@ -108,7 +108,7 @@ recovery, integration and review with the lead agent. Hosted CI is out of scope.
   records are implemented. Zekkyou teams can opt in with a trusted journal server.
 - Zekkyou migrated to published Alto `3bcec285537c5ab44d301a43737fc9d0b8351a7a`,
   including the durable-host additions and independent Serial/Stepped runners.
-  The current published pin is `f1dcffedae3f1033c553621f8fd411a83f45a5ce`
+  The current published pin is `d5c7de2c99f85f6ab0498de8863eae78ef10e6e8`
   with parent/child continuations and retirement; fresh builds use the Git
   dependency directly.
   Runtime policies stay in Zekkyou.
