@@ -3,7 +3,7 @@ defmodule Zekkyou.TUI.App do
   use ExRatatui.App
 
   alias ExRatatui.Event.{Key, Paste, Resize}
-  alias Alto.TUI.{Clipboard, Selection}
+  alias Alto.TUI.{Clipboard, Selection, WorkspaceForm}
   alias ExRatatui.Layout.Rect
   alias Zekkyou.TUI.View
 
@@ -18,6 +18,7 @@ defmodule Zekkyou.TUI.App do
        model: console.new(opts),
        console: console,
        draft: "",
+       workspace_form: nil,
        focus: :composer,
        scroll: 0,
        pending: nil,
@@ -37,7 +38,13 @@ defmodule Zekkyou.TUI.App do
 
   @impl true
   def render(state, frame) do
-    view = Map.merge(state.model, %{draft: state.draft, focus: state.focus, scroll: state.scroll})
+    view =
+      Map.merge(state.model, %{
+        draft: state.draft,
+        focus: state.focus,
+        scroll: state.scroll,
+        workspace_form: state.workspace_form
+      })
 
     Selection.widgets(
       state.selection,
@@ -48,7 +55,15 @@ defmodule Zekkyou.TUI.App do
   @impl true
   def handle_event(event, state) do
     {width, height} = state.dimensions
-    view = Map.merge(state.model, %{draft: state.draft, focus: state.focus, scroll: state.scroll})
+
+    view =
+      Map.merge(state.model, %{
+        draft: state.draft,
+        focus: state.focus,
+        scroll: state.scroll,
+        workspace_form: state.workspace_form
+      })
+
     widgets = fn -> View.widgets(view, %Rect{width: width, height: height}) end
 
     case Selection.event(state.selection, event, state.dimensions, widgets) do
@@ -58,8 +73,31 @@ defmodule Zekkyou.TUI.App do
       {:handled, selection} ->
         {:noreply, %{state | selection: selection}}
 
-      {:click, _mouse, selection} ->
-        {:noreply, %{state | selection: selection}}
+      {:click, mouse, selection} ->
+        state = %{state | selection: selection}
+
+        if state.workspace_form do
+          rect = WorkspaceForm.rect(width, height)
+
+          if Alto.TUI.Layout.contains?(rect, mouse.x, mouse.y),
+            do:
+              workspace_result(
+                state,
+                WorkspaceForm.click(
+                  state.workspace_form,
+                  mouse.y - rect.y - 1,
+                  mouse.x - rect.x - 1
+                )
+              ),
+            else: {:noreply, state}
+        else
+          layout = Alto.TUI.Layout.calculate(width, height)
+
+          if layout.rail && mouse.y == layout.rail.y + 1 &&
+               Alto.TUI.Layout.contains?(layout.rail, mouse.x, mouse.y),
+             do: open_workspace_form(state),
+             else: {:noreply, state}
+        end
 
       {:copy, text, selection} ->
         result = state.clipboard_write.(text)
@@ -100,6 +138,14 @@ defmodule Zekkyou.TUI.App do
          }},
       else: route_event(%Paste{content: content}, state)
   end
+
+  defp route_event(%Key{} = event, %{workspace_form: form} = state) when not is_nil(form),
+    do: workspace_result(state, WorkspaceForm.key(form, event))
+
+  defp route_event(%Key{code: "f7"}, state), do: open_workspace_form(state)
+
+  defp route_event(%Paste{content: text}, %{workspace_form: form} = state) when not is_nil(form),
+    do: {:noreply, %{state | workspace_form: WorkspaceForm.paste(form, text)}}
 
   defp route_event(%Key{} = event, state), do: key(event, state)
 
@@ -167,10 +213,32 @@ defmodule Zekkyou.TUI.App do
           state.draft
       end
 
-    scroll = if action == :new or match?({:select, _}, action), do: 0, else: state.scroll
+    scroll =
+      if action == :new or match?({:workspace, _}, action) or match?({:select, _}, action),
+        do: 0,
+        else: state.scroll
+
+    form =
+      if match?({:workspace, _}, action) and state.workspace_form do
+        if String.starts_with?(model.notice, "Workspace opened:"),
+          do: nil,
+          else: %{state.workspace_form | error: model.notice}
+      else
+        state.workspace_form
+      end
 
     {:noreply,
-     %{state | model: model, draft: draft, pending: nil, submitted_draft: nil, scroll: scroll}}
+     %{
+       state
+       | model: model,
+         draft: draft,
+         pending: nil,
+         submitted_draft: nil,
+         scroll: scroll,
+         workspace_form: form,
+         focus:
+           if(match?({:workspace, _}, action) and is_nil(form), do: :composer, else: state.focus)
+     }}
   end
 
   def handle_info({:DOWN, ref, :process, _pid, reason}, %{pending: %Task{ref: ref}} = state) do
@@ -216,6 +284,25 @@ defmodule Zekkyou.TUI.App do
 
     {:noreply, %{state | pending: task, submitted_draft: submitted_draft}}
   end
+
+  defp open_workspace_form(state) do
+    base = Map.get(state.model, :workspace_base) || "the service's default workspace"
+
+    {:noreply,
+     %{
+       state
+       | workspace_form:
+           WorkspaceForm.new(
+             base,
+             "the service host",
+             Enum.map(Map.get(state.model, :projects, []), & &1["root"])
+           )
+     }}
+  end
+
+  defp workspace_result(state, :cancel), do: {:noreply, %{state | workspace_form: nil}}
+  defp workspace_result(state, {:edit, form}), do: {:noreply, %{state | workspace_form: form}}
+  defp workspace_result(state, {:submit, path}), do: dispatch(state, {:workspace, path})
 
   defp terminal_dimensions do
     case ExRatatui.terminal_size() do

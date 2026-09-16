@@ -23,7 +23,7 @@ defmodule Zekkyou.TUI.ViewTest do
     viewport = %Rect{x: 3, y: 2, width: 120, height: 36}
     rendered = View.widgets(@state, viewport)
 
-    assert length(rendered) == 6
+    assert length(rendered) == 8
 
     assert Enum.all?(rendered, fn {_widget, rect} ->
              rect.x >= viewport.x and rect.y >= viewport.y and
@@ -38,7 +38,16 @@ defmodule Zekkyou.TUI.ViewTest do
       end)
 
     assert task_list.selected == 1
-    assert task_list.block.title == "Tasks"
+
+    assert Enum.any?(rendered, fn
+             {%ExRatatui.Widgets.Block{title: "Tasks"}, _} -> true
+             _ -> false
+           end)
+
+    assert Enum.any?(rendered, fn
+             {%Paragraph{text: "＋ New workspace · F7"}, _} -> true
+             _ -> false
+           end)
   end
 
   test "collapses optional panes on narrow terminals" do

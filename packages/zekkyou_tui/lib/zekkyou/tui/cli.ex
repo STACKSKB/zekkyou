@@ -5,6 +5,7 @@ defmodule Zekkyou.TUI.CLI do
   Usage: zekkyou-tui [--socket PATH] [--profile PROFILE]
          zekkyou-tui --ssh HOST --remote-socket PATH [--port N] [--profile PROFILE]
 
+  F7 opens a new workspace in an existing folder on the service host.
   Tab focuses tasks or composer; arrows select tasks; Enter sends a message.
   Ctrl+Q detaches, Ctrl+R reconnects, Ctrl+N starts a new task, Ctrl+K cancels.
   Ctrl+A approves the displayed request, Ctrl+D denies. Page Up/Down scroll.

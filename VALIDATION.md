@@ -1,7 +1,7 @@
 # Development checkpoint — 2026-09-10
 
 Current Alto source: published commit
-`f554634445c66bc56e5d656da973f7910c2f90a9`, pinned in both the service and
+`c2c0d44624dd009e8733234c61e7a38b95ada40e`, pinned in both the service and
 terminal dependency declarations and lockfiles. Fresh builds use the Git
 dependency directly. The sections below retain earlier development checkpoints;
 the latest validation is recorded at the end.
@@ -553,3 +553,29 @@ Validation with no `ALTO_PATH` override:
 System clipboard writes require terminal OSC 52 support; native Shift+drag and
 terminal copy remain available. Ctrl+V reads the local clipboard when a helper
 is available, otherwise it pastes the last selection copied inside the client.
+
+## Folder workspaces in the TUI — 2026-09-16
+
+Alto `c2c0d44624dd009e8733234c61e7a38b95ada40e` provides a shared F7
+folder dialog, a pinned New workspace action, saved-folder recall, and trusted
+per-run working-directory selection. Zekkyou exposes `projects.list` and
+`projects.open` on its private service transport, stores registered folders in
+`projects.json`, and persists each admitted task's workspace identity and cwd.
+Relative paths resolve on the service host. Follow-ups retain the saved session
+folder, and an explicit mismatch is rejected before queue admission.
+
+Task summaries now derive status, evidence and revision from one ledger snapshot.
+This fixes a race exposed by lifecycle tests where a completed status could be
+paired with an earlier revision and cause immediate cleanup to report stale state.
+
+Validation:
+
+- Alto: full suite, 877 tests passed (`--max-cases 1 --seed 920397`).
+- Zekkyou service against the published Git pin: 108 tests passed.
+- Zekkyou TUI against the published Git pin: 18 tests passed.
+- Warning-free compilation and formatting checks passed.
+- New checks cover narrow layouts, Unicode paths, invalid folders, draft
+  preservation, saved-folder recall, real tool execution in a second folder,
+  queued-folder persistence across restart, and cross-folder resume rejection.
+
+Restart the service after upgrade to expose the new workspace commands.

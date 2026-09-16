@@ -72,7 +72,7 @@ Explicit terminal-task cleanup uses Alto's retirement APIs and preserves a
 durable plan until all consumed resources have been retired.
 
 The service and terminal dependency declarations and lockfiles pin Alto
-`f554634445c66bc56e5d656da973f7910c2f90a9`, published on Alto’s `main` branch
+`c2c0d44624dd009e8733234c61e7a38b95ada40e`, published on Alto’s `main` branch
 for `0.0.1`. Fresh builds use the pinned Git dependency. The optional
 `ALTO_PATH=/absolute/path/to/alto` override remains available for local
 development in both packages. Qualify persisted state against this exact

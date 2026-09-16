@@ -10,6 +10,10 @@ defmodule Zekkyou.Console do
   alias Zekkyou.{Client, Config, SSH}
 
   defstruct opts: [],
+            workspace_id: nil,
+            workspace_root: nil,
+            workspace_base: nil,
+            projects: [],
             client: nil,
             tunnel: nil,
             tasks: [],
@@ -64,6 +68,16 @@ defmodule Zekkyou.Console do
         try do
           # Approval/result notifications are delivered regardless of domain.
           request(client, %{type: "attach", domains: ["live"]})
+          reply = request(client, %{type: "command", name: "projects.list", payload: %{}})
+          default = reply["default"]
+
+          connected = %{
+            connected
+            | projects: reply["projects"],
+              workspace_base: default["root"],
+              workspace_root: connected.workspace_root || default["root"]
+          }
+
           refresh(reset_history(connected))
         catch
           kind, reason ->
@@ -77,8 +91,17 @@ defmodule Zekkyou.Console do
     end
   end
 
-  defp do_perform(model, :new, _owner),
-    do: reset_history(%{model | selected_id: nil, notice: "New task"})
+  defp do_perform(model, :new, _owner) do
+    task = selected(model)
+
+    reset_history(%{
+      model
+      | selected_id: nil,
+        notice: "New task",
+        workspace_id: if(task, do: Map.get(task, :workspace_id), else: model.workspace_id),
+        workspace_root: (task && Map.get(task, :cwd)) || model.workspace_root
+    })
+  end
 
   defp do_perform(model, {:select, id}, _owner) do
     if Enum.any?(model.tasks, &(&1.id == id)),
@@ -91,6 +114,22 @@ defmodule Zekkyou.Console do
 
   defp do_perform(%{client: nil} = model, _action, _owner),
     do: %{model | notice: "Reconnect before sending commands"}
+
+  defp do_perform(model, {:workspace, path}, _owner) do
+    reply =
+      request(model.client, %{type: "command", name: "projects.open", payload: %{path: path}})
+
+    project = reply["project"]
+
+    reset_history(%{
+      model
+      | selected_id: nil,
+        workspace_id: project["id"],
+        workspace_root: project["root"],
+        projects: [project | Enum.reject(model.projects, &(&1["id"] == project["id"]))],
+        notice: "Workspace opened: " <> project["root"]
+    })
+  end
 
   defp do_perform(model, :poll, _owner), do: refresh(model)
 
@@ -120,7 +159,8 @@ defmodule Zekkyou.Console do
 
       true ->
         profile = (task && task.config) || Keyword.get(model.opts, :profile, "coding")
-        payload = %{"profile" => profile, "task" => text}
+        workspace_id = if task, do: Map.get(task, :workspace_id), else: model.workspace_id
+        payload = %{"profile" => profile, "task" => text, "workspace_id" => workspace_id}
 
         payload =
           if task && task.session_id,
@@ -263,6 +303,7 @@ defmodule Zekkyou.Console do
            title: clean(s["task"] || "Untitled task"),
            status: status,
            config: Keyword.get(opts, :profile, "coding"),
+           cwd: s["cwd"],
            usage: %{},
            started_at_ms: s["started_at_ms"] || 0
          }}
@@ -281,6 +322,7 @@ defmodule Zekkyou.Console do
         title: clean(r["title"] || "Untitled task"),
         status: status,
         config: r["config"],
+        cwd: get_in(acc, [id, :cwd]),
         usage: r["usage"] || %{},
         started_at_ms: r["started_at_ms"] || 0
       })
@@ -319,6 +361,8 @@ defmodule Zekkyou.Console do
           title: clean(task["task"]),
           status: status,
           config: task["profile"],
+          workspace_id: task["workspace_id"],
+          cwd: task["cwd"],
           usage: (run && run["usage"]) || %{},
           started_at_ms: task["created_at_ms"] || 0
         }
@@ -511,7 +555,13 @@ defmodule Zekkyou.Console do
         "New task\nProfile: #{clean(Keyword.get(model.opts, :profile, "coding"))}"
       end
 
-    %{model | entries: entries, detail: detail}
+    folder = (task && Map.get(task, :cwd)) || model.workspace_root || "Service default"
+
+    %{
+      model
+      | entries: entries,
+        detail: "Workspace folder\n" <> clean(folder) <> "\nF7 New workspace\n\n" <> detail
+    }
   end
 
   defp history_entry(%{"event" => "model_completed", "data" => data}, true),
@@ -554,6 +604,24 @@ defmodule Zekkyou.Console do
       {:ok, reply} -> reply
       {:error, reason} -> throw({:console, reason})
     end
+  end
+
+  defp failed(model, {:workspace, _path}, {:server, _, _} = reason) do
+    detail = inspect(reason)
+
+    notice =
+      cond do
+        String.contains?(detail, "project_not_directory") ->
+          "Folder does not exist or is not a directory on the service host."
+
+        String.contains?(detail, "invalid_workspace_path") ->
+          "Enter a folder path on one line."
+
+        true ->
+          "Could not open workspace: #{clean(reason)}"
+      end
+
+    %{model | notice: notice}
   end
 
   defp failed(model, action, {:server, _, _} = reason) when action != :connect,

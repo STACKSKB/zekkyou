@@ -6,7 +6,7 @@ defmodule Zekkyou.TUI.View do
   performs no I/O, which makes it useful both to the controller and to tests.
   """
 
-  alias Alto.TUI.Layout
+  alias Alto.TUI.{Layout, WorkspaceForm}
   alias ExRatatui.Layout.Rect
   alias ExRatatui.Widgets.{Block, List, Paragraph}
 
@@ -30,10 +30,23 @@ defmodule Zekkyou.TUI.View do
           items: task_items,
           selected: selected,
           highlight_symbol: "› ",
-          block: panel(if(Map.get(state, :focus) == :tasks, do: "Tasks •", else: "Tasks"))
+          block: nil
         }
 
-        [{list, geometry.rail}]
+        rect = geometry.rail
+
+        inner = %Rect{
+          x: rect.x + 1,
+          y: rect.y + 2,
+          width: max(rect.width - 2, 0),
+          height: max(rect.height - 3, 0)
+        }
+
+        [
+          {panel(if(Map.get(state, :focus) == :tasks, do: "Tasks •", else: "Tasks")), rect},
+          {%Paragraph{text: "＋ New workspace · F7"}, %{inner | y: rect.y + 1, height: 1}},
+          {list, inner}
+        ]
       else
         []
       end
@@ -100,9 +113,15 @@ defmodule Zekkyou.TUI.View do
         },
         else: transcript
 
-    rail ++
-      [{center, geometry.transcript}] ++
-      settings ++ [{composer, geometry.composer}] ++ details ++ [{status, geometry.status}]
+    widgets =
+      rail ++
+        [{center, geometry.transcript}] ++
+        settings ++ [{composer, geometry.composer}] ++ details ++ [{status, geometry.status}]
+
+    case Map.get(state, :workspace_form) do
+      nil -> widgets
+      form -> widgets ++ WorkspaceForm.widgets(form, viewport)
+    end
   end
 
   defp selected_title(state) do
@@ -141,7 +160,7 @@ defmodule Zekkyou.TUI.View do
   defp status_text(state) do
     connection = state |> Map.get(:connection, "offline") |> to_string_or_empty()
 
-    " #{connection} | ^Q quit ^R reconnect ^N new Tab focus ^K cancel ^A approve ^D deny Enter send"
+    " #{connection} | F7 New workspace ^Q quit ^R reconnect ^N new task Tab focus ^K cancel ^A approve ^D deny Enter send"
   end
 
   defp to_string_or_empty(value) when is_binary(value), do: value

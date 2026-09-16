@@ -24,7 +24,8 @@ defmodule Zekkyou.Runtime.Alto do
            Zekkyou.Tasks.commands(name)
            |> Map.merge(Zekkyou.Mailbox.commands(name))
            |> Map.merge(Zekkyou.ChildRuns.commands(name))
-           |> Map.merge(Zekkyou.Workspaces.commands(config, name)),
+           |> Map.merge(Zekkyou.Workspaces.commands(config, name))
+           |> Map.merge(Zekkyou.Projects.commands(config)),
          max_active_runs: config.scheduling[:workers] + 2,
          cwd: config.workspace,
          sessions: [session_dir: Path.join(config.state_dir, "sessions")],

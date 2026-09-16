@@ -384,12 +384,23 @@ defmodule Zekkyou.Tasks do
          true <- is_integer(delay) and delay in 0..31_536_000_000,
          true <- is_nil(resume) or is_binary(resume),
          {:ok, options} <- Zekkyou.Config.resolve(config, profile),
-         {:ok, parent_store} <- Zekkyou.ParentRuns.store_binding(options) do
+         {:ok, root} <-
+           Zekkyou.Projects.root(
+             config,
+             payload["workspace_id"],
+             Keyword.get(options, :cwd, config.workspace)
+           ),
+         {:ok, root} <-
+           Zekkyou.Projects.resume_root(config, resume, root, not is_nil(payload["workspace_id"])),
+         {:ok, parent_store} <- Zekkyou.ParentRuns.store_binding(options),
+         {:ok, project} <- Zekkyou.Projects.bind(config, root) do
       {:ok,
        %{
          "id" => id,
          "profile" => profile,
          "parent_store" => parent_store,
+         "workspace_id" => project["id"],
+         "cwd" => project["root"],
          "task" => text,
          "resume" => resume,
          "created_at_ms" => now,
@@ -445,6 +456,7 @@ defmodule Zekkyou.Tasks do
          {:ok, extra} <-
            Zekkyou.ParentRuns.options(profile_options, name, payload, approval_resume?) do
       opts = [owner: self()] ++ extra
+      opts = if payload["cwd"], do: Keyword.put(opts, :cwd, payload["cwd"]), else: opts
 
       opts =
         cond do
@@ -550,10 +562,13 @@ defmodule Zekkyou.Tasks do
     if payload do
       active = state.active[id]
       checkpoint = if recovery, do: Map.get(recovery, :checkpoint) || %{}, else: %{}
-      status = task_status(OperationLog.status(state.ledger, id), record, active)
+      # Status, evidence and revision must describe one ledger snapshot. A second
+      # status read can observe completion with the previous dispatch revision.
+      ledger_status = if recovery, do: recovery.status, else: nil
+      status = task_status(ledger_status, record, active)
 
       evidence =
-        case OperationLog.status(state.ledger, id) do
+        case ledger_status do
           {:decided, _, ev} -> ev
           _ -> %{}
         end
@@ -561,6 +576,8 @@ defmodule Zekkyou.Tasks do
       %{
         "id" => id,
         "profile" => payload["profile"],
+        "workspace_id" => payload["workspace_id"],
+        "cwd" => payload["cwd"] || state.config.workspace,
         "task" => payload["task"],
         "status" => status,
         "parent_continuation" =>

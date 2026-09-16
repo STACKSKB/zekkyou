@@ -10,9 +10,10 @@ Development is in progress; this is not yet the unattended-operation release.
 ## Development
 
 The dependency and lockfiles pin Alto commit
-`f554634445c66bc56e5d656da973f7910c2f90a9`, which includes exact parent-batch
+`c2c0d44624dd009e8733234c61e7a38b95ada40e`, which includes exact parent-batch
 continuations, independent child approvals and explicit resource retirement
-for the Serial/Stepped runners, plus shared TUI screen selection and clipboard support.
+for the Serial/Stepped runners, plus shared TUI screen selection, clipboard support,
+and the folder workspace dialog.
 This commit is published on Alto’s `main` branch for the `0.0.1` release.
 Build directly from the pinned Git dependency:
 
@@ -135,6 +136,16 @@ Ctrl+N starts a new task, Ctrl+K requests cancellation, Ctrl+A approves the
 shown decision, and Ctrl+D denies it. For a task requiring operator review,
 inspect its evidence and enter `/retry NOTE`, `/committed NOTE`, or `/failed NOTE`
 in the composer. Decisions are revision-fenced across clients. Ctrl+Q detaches.
+Press **F7** or click **＋ New workspace** above the task list to open another
+existing folder. Enter a path on the **service host**; relative paths start at
+its configured default workspace, and `~` uses the service account's home.
+Up/Down recalls saved folders in the dialog.
+Opening a workspace preserves your draft and prepares a new task. The details
+pane shows the full working folder. Workspaces and queued folder choices survive
+service restart; existing tasks and resumed conversations retain their original
+folder. An SSH client uses folders on the remote host. Restart the service after
+upgrading to make its workspace commands available.
+
 Drag anywhere in the TUI to select visible text, including task rows, details,
 composer text, and status. Ctrl+C or Alt+C copies the selection; Esc clears it.
 Ctrl+Shift+A selects the visible screen when the terminal forwards that chord.

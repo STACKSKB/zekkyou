@@ -49,6 +49,15 @@ work before a run exists, retains task identity across restart, and supports
 cancellation of queued and running work. Follow-ups create new durable tasks
 using the selected task's completed session as context.
 
+In the TUI, F7 opens an existing folder as a workspace on the service host.
+The service registers that folder and persists its identity and working path in
+each new task, including delayed work. The private transport's `projects.list`
+and `projects.open` commands list and register folders; `tasks.submit` accepts
+`workspace_id` from that catalog. It does not accept arbitrary execution options.
+A resumed session keeps its recorded folder, and a conflicting explicit workspace
+is rejected. Without a chosen workspace, new work uses the profile's configured
+folder or the service default.
+
 For a selected `requires_operator` task, inspect the recorded evidence in its
 details and enter `/retry NOTE`, `/committed NOTE`, or `/failed NOTE`. A nonempty
 note is required and the decision is fenced by the displayed task revision.

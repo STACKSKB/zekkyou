@@ -14,6 +14,17 @@ defmodule Zekkyou.TUI.AppTest do
         connection: "connected"
       }
 
+    def perform(model, {:workspace, "/bad"}, _),
+      do: Map.put(model, :notice, "Request rejected: missing folder")
+
+    def perform(model, {:workspace, path}, _),
+      do:
+        Map.merge(model, %{
+          selected_id: nil,
+          workspace_root: path,
+          notice: "Workspace opened: " <> path
+        })
+
     def perform(model, {:submit, _}, _), do: Map.put(model, :notice, "Sent")
     def perform(model, _, _), do: model
     def close(_), do: :ok
@@ -35,6 +46,39 @@ defmodule Zekkyou.TUI.AppTest do
 
     def perform(model, _, _), do: model
     def close(_), do: :ok
+  end
+
+  test "F7 edits a folder separately from the draft and opens a new workspace" do
+    {:ok, state} = App.mount(console_module: Console, test_mode: {140, 40})
+    state = %{state | draft: "keep my draft"}
+    {:noreply, state} = App.handle_event(%Key{code: "f7"}, state)
+    assert state.workspace_form.host == "the service host"
+    {:noreply, state} = App.handle_event(%Paste{content: "/another/project"}, state)
+    assert state.draft == "keep my draft"
+    {:noreply, state} = App.handle_event(%Key{code: "enter"}, state)
+    ref = state.pending.ref
+    assert_receive {^ref, {model, {:workspace, "/another/project"}}}
+    {:noreply, state} = App.handle_info({ref, {model, {:workspace, "/another/project"}}}, state)
+    assert state.workspace_form == nil
+    assert state.model.workspace_root == "/another/project"
+    assert state.model.selected_id == nil
+    assert state.draft == "keep my draft"
+    assert state.focus == :composer
+  end
+
+  test "workspace validation keeps the dialog open and Escape preserves the selected task" do
+    {:ok, state} = App.mount(console_module: Console, test_mode: {140, 40})
+    {:noreply, state} = App.handle_event(%Key{code: "f7"}, state)
+    {:noreply, state} = App.handle_event(%Paste{content: "/bad"}, state)
+    {:noreply, state} = App.handle_event(%Key{code: "enter"}, state)
+    ref = state.pending.ref
+    assert_receive {^ref, result}
+    {:noreply, state} = App.handle_info({ref, result}, state)
+    assert state.workspace_form.error =~ "missing folder"
+    assert state.model.selected_id == "run"
+    {:noreply, state} = App.handle_event(%Key{code: "esc"}, state)
+    assert state.workspace_form == nil
+    assert state.model.selected_id == "run"
   end
 
   test "selects and copies every visible pane using the shared Alto selection layer" do
