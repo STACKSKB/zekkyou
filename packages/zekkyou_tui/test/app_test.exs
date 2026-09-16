@@ -30,6 +30,20 @@ defmodule Zekkyou.TUI.AppTest do
       Map.merge(model, %{workspace_id: id, workspace_root: project["root"], selected_id: nil})
     end
 
+    def perform(model, {:close_workspace, id}, _) do
+      projects =
+        Enum.map(model.projects, &if(&1["id"] == id, do: Map.put(&1, "closed", true), else: &1))
+
+      next = Enum.find(projects, &(&1["closed"] != true))
+
+      Map.merge(model, %{
+        projects: projects,
+        selected_id: nil,
+        workspace_id: next && next["id"],
+        workspace_root: next && next["root"]
+      })
+    end
+
     def perform(model, {:select, id}, _), do: Map.put(model, :selected_id, id)
 
     def perform(model, :new, _), do: Map.put(model, :selected_id, nil)
@@ -298,6 +312,36 @@ defmodule Zekkyou.TUI.AppTest do
     assert state.model.workspace_root == "/current"
     assert state.workspace_form == nil
     assert state.draft == "draft"
+  end
+
+  test "workspace close is available by mouse and gear shortcut and preserves the draft" do
+    {:ok, state} = App.mount(console_module: Console, test_mode: {140, 40})
+    project = %{"id" => "p1", "name" => "Folder", "root" => "/p1"}
+
+    state = %{
+      state
+      | draft: "keep draft",
+        model:
+          Map.merge(state.model, %{projects: [project], workspace_id: "p1", selected_id: nil})
+    }
+
+    rail = Alto.TUI.Layout.calculate(140, 40).rail
+    clicked = sidebar_click(state, rail.x + rail.width - 2, rail.y + 2) |> finish_sidebar_action()
+    assert clicked.model.projects == [Map.put(project, "closed", true)]
+
+    assert Zekkyou.TUI.View.rail_rows(clicked.model) == [
+             %{kind: :task, id: "run", label: "running  Running"}
+           ]
+
+    assert clicked.draft == "keep draft"
+    assert clicked.model.workspace_id == nil
+    {:noreply, gear} = App.handle_event(%Key{code: "g", modifiers: ["ctrl"]}, state)
+    {:noreply, closing} = App.handle_event(%Key{code: "x"}, gear)
+    assert closing.pending_action == {:close_workspace, "p1"}
+    closed = finish_sidebar_action(closing)
+    assert closed.model.workspace_id == nil
+    assert closed.focus == :composer
+    assert closed.draft == "keep draft"
   end
 
   test "workspace sidebar navigates both ways and mouse actions open folders or compose" do

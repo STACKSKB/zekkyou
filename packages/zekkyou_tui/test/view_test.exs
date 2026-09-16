@@ -83,6 +83,26 @@ defmodule Zekkyou.TUI.ViewTest do
     assert screen =~ "Second task"
   end
 
+  test "closed workspace tasks stay hidden until their workspace is reopened" do
+    project = %{"id" => "p", "name" => "Folder", "root" => "/p", "closed" => true}
+
+    state =
+      Map.merge(@state, %{
+        projects: [project],
+        selected_id: nil,
+        workspace_id: nil,
+        tasks: [%{id: "t", title: "Saved", status: "running", workspace_id: "p"}]
+      })
+
+    assert View.rail_rows(state) == []
+    state = %{state | projects: [Map.delete(project, "closed")], workspace_id: "p"}
+    assert Enum.map(View.rail_rows(state), & &1.id) == ["p", "t"]
+    rail = Alto.TUI.Layout.calculate(140, 40).rail
+
+    assert View.rail_target(state, 140, 40, rail.x + rail.width - 2, rail.y + 2) ==
+             {:close_workspace, "p"}
+  end
+
   test "collapses optional panes on narrow terminals" do
     rendered = View.widgets(@state, %Rect{width: 60, height: 12})
 

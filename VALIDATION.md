@@ -1,7 +1,7 @@
 # Development checkpoint — 2026-09-10
 
 Current Alto source: published commit
-`c987a782b3d8208b9c09acf011f66a51f3ca118b`, pinned in both the service and
+`e748a11453395615a50ab0e769d4f2a7df37ef5a`, pinned in both the service and
 terminal dependency declarations and lockfiles. Fresh builds use the Git
 dependency directly. The sections below retain earlier development checkpoints;
 the latest validation is recorded at the end.
@@ -868,3 +868,31 @@ opening a mixed-case folder through both TUIs instead of relying on paste.
 Validation: Alto TUI 95 tests passed; Zekkyou TUI 31 tests passed against the
 published dependency without ALTO_PATH. Formatting and whitespace checks passed.
 Restart the terminal clients to load the fix.
+
+## Close workspace — 2026-09-16
+
+Published Alto `e748a11453395615a50ab0e769d4f2a7df37ef5a` and updated both
+service and TUI dependency pins. Workspace rows have a clickable close mark;
+Ctrl+G X closes the current workspace. Alto also offers Close workspace in its
+Ctrl+G W menu. Closing the selected workspace moves to another open workspace,
+or leaves an empty workspace view when the last one is closed, retaining drafts.
+
+Closing records navigation state under the existing catalog lock. It does not
+delete folders, task records, sessions, or cancel running work. Reopening a folder
+restores its original workspace ID and tasks. Zekkyou's projects.close command
+persists the closed state; reconnect and background task binding preserve it.
+Closed-workspace tasks remain tracked but are hidden with their workspace.
+
+Validation:
+
+- Alto catalog and TUI suites: 101 tests passed, including mouse and menu close,
+  Ctrl+G X, draft/task retention, last-workspace handling, reopening, and retaining
+  active run state.
+- Zekkyou service suite: 112 tests passed against published dependencies, including
+  close/reconnect/reopen, retained task files and records, and background binding.
+- Zekkyou TUI suite: 33 tests passed against published dependencies, including close
+  hit targets, keyboard close, and hidden/restored workspace task rows.
+- Formatting and whitespace checks passed. Dependency lockfiles only change the
+  Alto and Alto TUI revisions.
+
+Restart the TUIs and Zekkyou service to load the new close controls and command.

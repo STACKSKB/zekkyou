@@ -90,11 +90,22 @@ defmodule Zekkyou.Console do
           reply = request(client, %{type: "command", name: "projects.list", payload: %{}})
           default = reply["default"]
 
+          projects = reply["projects"]
+          open = Enum.reject(projects, &(&1["closed"] == true))
+
+          workspace =
+            Enum.find(
+              open,
+              &(&1["id"] == connected.workspace_id or &1["root"] == connected.workspace_root)
+            ) ||
+              Enum.find(open, &(&1["id"] == default["id"])) || List.first(open)
+
           connected = %{
             connected
-            | projects: reply["projects"],
+            | projects: projects,
               workspace_base: default["root"],
-              workspace_root: connected.workspace_root || default["root"]
+              workspace_id: workspace && workspace["id"],
+              workspace_root: workspace && workspace["root"]
           }
 
           refresh(reset_history(connected))
@@ -132,7 +143,7 @@ defmodule Zekkyou.Console do
   end
 
   defp do_perform(model, {:select_workspace, id}, _owner) do
-    case Enum.find(model.projects, &(&1["id"] == id)) do
+    case Enum.find(model.projects, &(&1["id"] == id and &1["closed"] != true)) do
       nil ->
         %{model | notice: "Workspace is no longer available"}
 
@@ -149,6 +160,38 @@ defmodule Zekkyou.Console do
 
   defp do_perform(%{client: nil} = model, _action, _owner),
     do: %{model | notice: "Reconnect before sending commands"}
+
+  defp do_perform(model, {:close_workspace, nil}, _owner),
+    do: %{model | notice: "No workspace to close"}
+
+  defp do_perform(model, {:close_workspace, id}, _owner) do
+    reply = request(model.client, %{type: "command", name: "projects.close", payload: %{id: id}})
+    project = reply["project"]
+    task = selected(model)
+
+    closing_current? =
+      if task,
+        do: Map.get(task, :workspace_id) == id or Map.get(task, :cwd) == project["root"],
+        else: model.workspace_id == id or model.workspace_root == project["root"]
+
+    model = %{model | projects: reply["projects"]}
+
+    model =
+      if closing_current? do
+        next = Enum.find(model.projects, &(&1["closed"] != true))
+
+        reset_history(%{
+          model
+          | selected_id: nil,
+            workspace_id: next && next["id"],
+            workspace_root: next && next["root"]
+        })
+      else
+        model
+      end
+
+    %{model | notice: "Workspace closed · reopen its folder to return"}
+  end
 
   defp do_perform(model, {:workspace, path}, _owner) do
     reply =
@@ -206,6 +249,9 @@ defmodule Zekkyou.Console do
     task = selected(model)
 
     cond do
+      task == nil and model.workspace_root == nil ->
+        %{model | notice: "Open a workspace first · ^G W"}
+
       String.trim(text) == "" ->
         %{model | notice: "Enter a message first"}
 

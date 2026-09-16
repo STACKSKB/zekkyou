@@ -5,7 +5,11 @@ defmodule Zekkyou.Projects do
   def commands(config) do
     %{
       "projects.list" => fn _ ->
-        with {:ok, default} <- Catalog.register_project(config.workspace, opts(config)),
+        with {:ok, default} <-
+               Catalog.register_project(
+                 config.workspace,
+                 Keyword.put(opts(config), :reopen, false)
+               ),
              {:ok, projects} <- Catalog.projects(opts(config)),
              do: {:ok, %{projects: projects, default: default}}
       end,
@@ -15,6 +19,15 @@ defmodule Zekkyou.Projects do
 
         _ ->
           {:error, :invalid_workspace_path}
+      end,
+      "projects.close" => fn
+        %{"id" => id} when is_binary(id) ->
+          with {:ok, project} <- Catalog.close_project(id, opts(config)),
+               {:ok, projects} <- Catalog.projects(opts(config)),
+               do: {:ok, %{project: project, projects: projects}}
+
+        _ ->
+          {:error, :invalid_workspace}
       end,
       "projects.open" => fn
         %{"path" => path} -> open(config, path)
@@ -70,7 +83,8 @@ defmodule Zekkyou.Projects do
     end
   end
 
-  def bind(config, root), do: Catalog.register_project(root, opts(config))
+  def bind(config, root),
+    do: Catalog.register_project(root, Keyword.put(opts(config), :reopen, false))
 
   defp opts(config), do: [path: Path.join(config.state_dir, "projects.json")]
 end

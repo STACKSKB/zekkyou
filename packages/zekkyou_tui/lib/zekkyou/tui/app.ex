@@ -172,6 +172,9 @@ defmodule Zekkyou.TUI.App do
             :new_workspace ->
               open_workspace_form(state)
 
+            {:close_workspace, id} ->
+              dispatch(state, {:close_workspace, id})
+
             %{kind: :project, id: id} ->
               dispatch(%{state | focus: :composer}, {:select_workspace, id})
 
@@ -288,6 +291,7 @@ defmodule Zekkyou.TUI.App do
     case String.downcase(code || "") do
       "e" -> dispatch(state, :efforts)
       "w" -> open_workspace_form(state)
+      "x" -> dispatch(state, {:close_workspace, View.active_project_id(state.model)})
       "n" -> dispatch(%{state | focus: :composer}, :new)
       "t" -> {:noreply, %{state | focus: :tasks}}
       "a" -> dispatch(state, :approve)
@@ -430,7 +434,8 @@ defmodule Zekkyou.TUI.App do
 
     scroll =
       if approval_changed? or action == :new or match?({:workspace, _}, action) or
-           match?({:select, _}, action) or match?({:select_workspace, _}, action),
+           match?({:select, _}, action) or
+           match?({:select_workspace, _}, action) or match?({:close_workspace, _}, action),
          do: 0,
          else: state.scroll
 
@@ -460,7 +465,8 @@ defmodule Zekkyou.TUI.App do
          details_scroll:
            if(
              approval_changed? or action == :new or
-               match?({:select, _}, action) or match?({:select_workspace, _}, action) or
+               match?({:select, _}, action) or
+               match?({:select_workspace, _}, action) or match?({:close_workspace, _}, action) or
                match?({:workspace, _}, action),
              do: 0,
              else: state.details_scroll
@@ -469,9 +475,18 @@ defmodule Zekkyou.TUI.App do
          workspace_form: form,
          focus:
            cond do
-             approval_changed? and View.approval(model) != nil -> :composer
-             match?({:workspace, _}, action) and is_nil(form) -> :composer
-             true -> state.focus
+             approval_changed? and View.approval(model) != nil ->
+               :composer
+
+             match?({:workspace, _}, action) and is_nil(form) ->
+               :composer
+
+             match?({:close_workspace, _}, action) and
+                 View.active_project_id(state.model) != View.active_project_id(model) ->
+               :composer
+
+             true ->
+               state.focus
            end
      }}
   end

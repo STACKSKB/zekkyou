@@ -17,7 +17,7 @@ defmodule Zekkyou.TUI.View do
     active = active_project_id(state)
 
     rows =
-      Enum.flat_map(projects, fn project ->
+      Enum.flat_map(Enum.reject(projects, &(&1["closed"] == true)), fn project ->
         expanded? = project["id"] == active
 
         header = %{
@@ -60,14 +60,22 @@ defmodule Zekkyou.TUI.View do
       row = y - rail.y - 2
 
       cond do
-        y == rail.y + 1 -> :new_workspace
-        row >= 0 and row < visible -> Enum.at(rows, row + offset)
-        true -> nil
+        y == rail.y + 1 ->
+          :new_workspace
+
+        row >= 0 and row < visible ->
+          case Enum.at(rows, row + offset) do
+            %{kind: :project, id: id} when x == rail.x + rail.width - 2 -> {:close_workspace, id}
+            row -> row
+          end
+
+        true ->
+          nil
       end
     end
   end
 
-  defp active_project_id(state) do
+  def active_project_id(state) do
     projects = Map.get(state, :projects, [])
     task = Enum.find(Map.get(state, :tasks, []), &(&1.id == Map.get(state, :selected_id)))
 
@@ -80,6 +88,25 @@ defmodule Zekkyou.TUI.View do
   defp task_project_id(task, projects) do
     Enum.find_value(projects, fn p ->
       if p["id"] == Map.get(task, :workspace_id) or p["root"] == Map.get(task, :cwd), do: p["id"]
+    end)
+  end
+
+  defp close_workspace_buttons(rows, selected, rect, inner) do
+    offset = max((selected || 0) - inner.height + 1, 0)
+
+    rows
+    |> Enum.drop(offset)
+    |> Enum.take(inner.height)
+    |> Enum.with_index()
+    |> Enum.flat_map(fn
+      {%{kind: :project}, row} ->
+        [
+          {%Paragraph{text: "×"},
+           %Rect{x: rect.x + rect.width - 2, y: inner.y + row, width: 1, height: 1}}
+        ]
+
+      _ ->
+        []
     end)
   end
 
@@ -120,8 +147,8 @@ defmodule Zekkyou.TUI.View do
           {panel(if(Map.get(state, :focus) == :tasks, do: "Workspaces •", else: "Workspaces")),
            rect},
           {%Paragraph{text: "+ New workspace · ^G W"}, %{inner | y: rect.y + 1, height: 1}},
-          {list, inner}
-        ]
+          {list, %{inner | width: max(inner.width - 2, 0)}}
+        ] ++ close_workspace_buttons(rows, selected, rect, inner)
       else
         []
       end
@@ -403,12 +430,12 @@ defmodule Zekkyou.TUI.View do
 
   defp status_text(%{leader?: true}),
     do:
-      " Gear: N new task · W folder · E effort · T tasks · A approve · D deny · K cancel · R reconnect · Q quit · Esc cancel"
+      " Gear: N new task · W folder · X close workspace · E effort · T tasks · A approve · D deny · K cancel · R reconnect · Q quit · Esc cancel"
 
   defp status_text(state) do
     connection = state |> Map.get(:connection, "offline") |> to_string_or_empty()
 
-    " #{connection} | ^G gear · N new task · W folder · E effort ^Q quit ^R reconnect ^N new task Tab focus ^K cancel ^A approve ^D deny Enter send"
+    " #{connection} | ^G gear · N new task · W folder · X close workspace · E effort ^Q quit ^R reconnect ^N new task Tab focus ^K cancel ^A approve ^D deny Enter send"
   end
 
   defp to_string_or_empty(value) when is_binary(value), do: value

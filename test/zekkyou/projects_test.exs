@@ -123,6 +123,48 @@ defmodule Zekkyou.ProjectsTest do
     Console.close(model)
   end
 
+  test "closed workspaces retain tasks, stay closed on reconnect, and can be reopened", ctx do
+    model =
+      Console.perform(
+        Console.new(socket: Config.socket_path(ctx.config), profile: "test"),
+        :connect,
+        self()
+      )
+
+    default_id = model.workspace_id
+    model = Console.perform(model, {:workspace, "second project"}, self())
+    other = model.workspace_id
+    model = Console.perform(model, {:submit, "{}"}, self())
+    task_id = model.selected_id
+    completed(ctx.name, task_id)
+    model = Console.perform(model, {:close_workspace, other}, self())
+    assert model.workspace_id == default_id
+    assert model.selected_id == nil
+    assert Enum.find(model.projects, &(&1["id"] == other))["closed"]
+    assert {:ok, bound} = Projects.bind(ctx.config, ctx.folder)
+    assert bound["closed"]
+    assert {:ok, folder} = Projects.root(ctx.config, other, ctx.root)
+    assert folder == ctx.folder
+    assert File.read!(Path.join(ctx.folder, "ran.txt")) == "run\n"
+    assert completed(ctx.name, task_id)["cwd"] == ctx.folder
+
+    model = Console.perform(model, :connect, self())
+    assert Enum.find(model.projects, &(&1["id"] == other))["closed"]
+    model = Console.perform(model, {:close_workspace, default_id}, self())
+    assert model.workspace_id == nil
+    assert model.workspace_root == nil
+    rejected = Console.perform(model, {:submit, "{}"}, self())
+    assert rejected.notice =~ "Open a workspace first"
+    model = Console.perform(model, :connect, self())
+    assert model.workspace_root == nil
+    assert Enum.all?(model.projects, & &1["closed"])
+    model = Console.perform(model, {:workspace, "second project"}, self())
+    assert model.workspace_id == other
+    refute Enum.find(model.projects, &(&1["id"] == other))["closed"]
+    assert Enum.any?(model.tasks, &(&1.id == task_id))
+    Console.close(model)
+  end
+
   test "console completes directories on the service host without registering them", ctx do
     model = Console.perform(Console.new(socket: Config.socket_path(ctx.config)), :connect, self())
 
