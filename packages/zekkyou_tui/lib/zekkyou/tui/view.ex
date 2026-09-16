@@ -8,7 +8,7 @@ defmodule Zekkyou.TUI.View do
 
   alias Alto.TUI.{Layout, WorkspaceForm}
   alias ExRatatui.Layout.Rect
-  alias ExRatatui.Widgets.{Block, List, Paragraph}
+  alias ExRatatui.Widgets.{Block, List, Paragraph, Popup}
 
   @type state :: map()
   @type rendered :: {ExRatatui.widget(), Rect.t()}
@@ -67,7 +67,8 @@ defmodule Zekkyou.TUI.View do
         notice = Map.get(state, :notice, "") |> to_string_or_empty()
 
         [
-          {%Paragraph{text: if(notice == "", do: " ", else: notice)}, geometry.settings}
+          {%Paragraph{text: effort_setting(state) <> if(notice == "", do: " ", else: notice)},
+           geometry.settings}
         ]
       else
         []
@@ -128,10 +129,41 @@ defmodule Zekkyou.TUI.View do
         settings ++ [{composer, geometry.composer}] ++ details ++ [{status, geometry.status}]
 
     case Map.get(state, :workspace_form) do
-      nil -> widgets
+      nil -> widgets ++ effort_widgets(state, viewport)
       form -> widgets ++ WorkspaceForm.widgets(form, viewport)
     end
   end
+
+  defp effort_setting(state) do
+    if Map.get(state, :effort_catalog),
+      do: "Effort #{Map.get(state, :selected_effort) || "default"} · ^G E  ",
+      else: ""
+  end
+
+  defp effort_widgets(%{effort_picker: %{choices: choices, index: index}}, viewport) do
+    title =
+      if length(choices) == 1,
+        do: "Effort not advertised · Esc close",
+        else: "Reasoning effort · ↑↓ Enter · Esc"
+
+    text =
+      choices
+      |> Enum.with_index()
+      |> Enum.map_join("\n", fn {value, i} ->
+        if(i == index, do: "› ", else: "  ") <> (value || "Provider default")
+      end)
+
+    [
+      {%Popup{
+         content: %Paragraph{text: text},
+         block: panel(title),
+         fixed_width: min(52, viewport.width),
+         fixed_height: min(length(choices) + 2, viewport.height)
+       }, viewport}
+    ]
+  end
+
+  defp effort_widgets(_, _), do: []
 
   def scroll_bottom(state, width, height) do
     geometry = Layout.calculate(width, height)
@@ -161,6 +193,8 @@ defmodule Zekkyou.TUI.View do
   end
 
   @doc "Selectable task content; chrome and empty-field hints are opt-in via Alt+drag."
+  def selection_content(%{effort_picker: picker}, _, _) when not is_nil(picker), do: []
+
   def selection_content(%{workspace_form: form}, width, height) when not is_nil(form),
     do: WorkspaceForm.selection_content(form, width, height)
 
@@ -287,19 +321,19 @@ defmodule Zekkyou.TUI.View do
     |> Enum.map(fn entry ->
       kind = entry |> Map.get(:kind, :message) |> to_string_or_empty() |> String.upcase()
       text = entry |> Map.get(:text, "") |> to_string_or_empty()
-      "#{kind}: #{text}"
+      "#{if kind == "REASONING", do: "THINKING", else: kind}: #{text}"
     end)
     |> Enum.join("\n")
   end
 
   defp status_text(%{leader?: true}),
     do:
-      " Gear: N new task · W folder · T tasks · A approve · D deny · K cancel · R reconnect · Q quit · Esc cancel"
+      " Gear: N new task · W folder · E effort · T tasks · A approve · D deny · K cancel · R reconnect · Q quit · Esc cancel"
 
   defp status_text(state) do
     connection = state |> Map.get(:connection, "offline") |> to_string_or_empty()
 
-    " #{connection} | ^G gear · N new task · W folder ^Q quit ^R reconnect ^N new task Tab focus ^K cancel ^A approve ^D deny Enter send"
+    " #{connection} | ^G gear · N new task · W folder · E effort ^Q quit ^R reconnect ^N new task Tab focus ^K cancel ^A approve ^D deny Enter send"
   end
 
   defp to_string_or_empty(value) when is_binary(value), do: value

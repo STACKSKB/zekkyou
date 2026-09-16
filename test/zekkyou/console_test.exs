@@ -5,13 +5,30 @@ defmodule Zekkyou.ConsoleTest do
   defmodule Provider do
     @behaviour Alto.Provider
     def describe(_), do: %{}
+    def list_models(_), do: {:ok, [%{id: "test-model", efforts: ["low", "high"]}]}
 
-    def stream(request, _sink, opts) do
+    def stream(request, sink, opts) do
       send(Keyword.fetch!(opts, :owner), {:executing, self(), request.messages})
 
+      send(Keyword.fetch!(opts, :owner), {:selected_effort, opts[:reasoning_effort]})
+      await(sink, "")
+    end
+
+    defp await(sink, reasoning) do
       receive do
+        {:reasoning, text} ->
+          sink.(Alto.Event.live(:model_reasoning_delta, %{text: text}))
+          await(sink, reasoning <> text)
+
         {:finish, text} ->
-          {:ok, %{message: text, tool_calls: [], usage: %{input_tokens: 10, output_tokens: 5}}}
+          {:ok,
+           %{
+             message: text,
+             tool_calls: [],
+             reasoning: reasoning,
+             provider_fields: %{"reasoning" => reasoning},
+             usage: %{input_tokens: 10, output_tokens: 5}
+           }}
       end
     end
   end
@@ -38,7 +55,7 @@ defmodule Zekkyou.ConsoleTest do
         profiles: %{
           "chat" =>
             Alto.Config.new(
-              provider: {Provider, owner: self()},
+              provider: {Provider, owner: self(), model: "test-model"},
               loop: Alto.chat_loop(),
               tools: [],
               run_timeout: 10_000
@@ -58,6 +75,64 @@ defmodule Zekkyou.ConsoleTest do
     start_supervised!({Service, config: config, name: name})
     on_exit(fn -> File.rm_rf!(dir) end)
     %{config: config, name: name, opts: [socket: Config.socket_path(config), profile: "chat"]}
+  end
+
+  test "effort is validated and reaches execution; reasoning streams and survives reconnect", %{
+    opts: opts,
+    name: name
+  } do
+    model = Console.perform(Console.new(opts), :connect, self())
+    model = Console.perform(model, :efforts, self())
+    assert model.effort_catalog["efforts"] == ["low", "high"]
+
+    assert {:error, :unsupported_reasoning_effort} =
+             Tasks.command(name, "submit", %{
+               "profile" => "chat",
+               "task" => "reject",
+               "reasoning_effort" => "invalid"
+             })
+
+    model = Console.perform(model, {:effort, "high"}, self())
+    model = Console.perform(model, {:submit, "think"}, self())
+    assert model.notice == "Sent"
+    assert_receive {:executing, provider, _}, 2000
+    assert_receive {:selected_effort, "high"}
+    send(provider, {:reasoning, "Checking the files"})
+
+    model =
+      eventually(model, fn m ->
+        Enum.any?(m.entries, &(&1.kind == :reasoning and &1.text == "Checking the files"))
+      end)
+
+    assert Enum.any?(model.live, fn {_, phase} -> phase == "model_reasoning_delta" end)
+    send(provider, {:finish, "Done"})
+    model = eventually(model, fn m -> Enum.any?(m.tasks, &(&1.status == "completed")) end)
+
+    model =
+      Console.perform(model, :efforts, self())
+      |> Console.perform({:effort, "low"}, self())
+      |> Console.perform({:submit, "continue"}, self())
+
+    assert_receive {:executing, next_provider, history}, 2000
+    assert_receive {:selected_effort, "low"}
+    assert Enum.any?(history, &(Alto.Reasoning.text(&1) == "Checking the files"))
+    send(next_provider, {:finish, "Next answer"})
+
+    model =
+      eventually(model, fn m ->
+        Enum.any?(m.tasks, &(&1.id == m.selected_id and &1.status == "completed"))
+      end)
+
+    id = model.selected_id
+    Console.close(model)
+
+    model =
+      Console.perform(Console.new(opts), :connect, self())
+      |> Console.perform({:select, id}, self())
+
+    assert Enum.any?(model.entries, &(&1.kind == :reasoning and &1.text == "Checking the files"))
+    assert Enum.any?(model.entries, &(&1.text == "Done"))
+    Console.close(model)
   end
 
   test "two clients recover the same conversation, follow up, and replay after restart", %{

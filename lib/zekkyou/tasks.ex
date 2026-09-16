@@ -26,6 +26,18 @@ defmodule Zekkyou.Tasks do
         {"tasks." <> operation, fn payload -> command(name, operation, payload) end}
       end
     )
+    |> Map.put("tasks.efforts", fn payload ->
+      config = GenServer.call(Service.component(name, :tasks), :configuration)
+
+      with {:ok, info} <- Zekkyou.Effort.catalog(config, payload["profile"]) do
+        GenServer.call(
+          Service.component(name, :tasks),
+          {:effort_catalog, payload["profile"], info}
+        )
+
+        {:ok, info}
+      end
+    end)
   end
 
   def children(config, name) do
@@ -98,6 +110,7 @@ defmodule Zekkyou.Tasks do
       queue: Service.component(name, :queue),
       ledger: Service.component(name, :ledger),
       active: %{},
+      effort_catalog: %{},
       pending_admissions: MapSet.new()
     }
 
@@ -122,7 +135,7 @@ defmodule Zekkyou.Tasks do
   @impl true
   def handle_call({"submit", payload}, _from, state) do
     reply =
-      with {:ok, task} <- validate_submission(payload, state.config),
+      with {:ok, task} <- validate_submission(payload, state.config, state.effort_catalog),
            :no_intent <- OperationLog.status(state.ledger, task["id"]),
            :ok <- Zekkyou.Lifecycle.available?(state.config, state.name, task),
            {:ok, _} <-
@@ -335,6 +348,9 @@ defmodule Zekkyou.Tasks do
     {:reply, :ok, %{state | active: active}}
   end
 
+  def handle_call({:effort_catalog, profile, info}, _from, state),
+    do: {:reply, :ok, %{state | effort_catalog: Map.put(state.effort_catalog, profile, info)}}
+
   def handle_call(:configuration, _from, state), do: {:reply, state.config, state}
   def handle_call(_request, _from, state), do: {:reply, {:error, :invalid_task_command}, state}
 
@@ -367,7 +383,7 @@ defmodule Zekkyou.Tasks do
 
   defp schedule_admissions, do: Process.send_after(self(), :repair_admissions, 250)
 
-  defp validate_submission(%{"profile" => profile, "task" => text} = payload, config)
+  defp validate_submission(%{"profile" => profile, "task" => text} = payload, config, catalogs)
        when is_binary(profile) and is_binary(text) and byte_size(text) in 1..32_000 do
     id =
       Map.get(
@@ -384,6 +400,7 @@ defmodule Zekkyou.Tasks do
          true <- is_integer(delay) and delay in 0..31_536_000_000,
          true <- is_nil(resume) or is_binary(resume),
          {:ok, options} <- Zekkyou.Config.resolve(config, profile),
+         :ok <- validate_effort(payload["reasoning_effort"], options, Map.get(catalogs, profile)),
          {:ok, root} <-
            Zekkyou.Projects.root(
              config,
@@ -398,6 +415,8 @@ defmodule Zekkyou.Tasks do
        %{
          "id" => id,
          "profile" => profile,
+         "reasoning_effort" => payload["reasoning_effort"],
+         "reasoning_model" => Zekkyou.Effort.model(options),
          "parent_store" => parent_store,
          "workspace_id" => project["id"],
          "cwd" => project["root"],
@@ -412,7 +431,17 @@ defmodule Zekkyou.Tasks do
     end
   end
 
-  defp validate_submission(_, _), do: {:error, :invalid_task}
+  defp validate_submission(_, _, _), do: {:error, :invalid_task}
+
+  defp validate_effort(nil, _options, _catalog), do: :ok
+
+  defp validate_effort(effort, options, %{model: model, efforts: choices}) do
+    if model == Zekkyou.Effort.model(options) and effort in choices,
+      do: :ok,
+      else: {:error, :unsupported_reasoning_effort}
+  end
+
+  defp validate_effort(_, _, _), do: {:error, :refresh_effort_catalog}
 
   defp execute(name, payload, context) do
     registry = Service.registry(name)
@@ -453,9 +482,16 @@ defmodule Zekkyou.Tasks do
       is_integer(grant) and recovered.revision == grant + 1 and decision in ["approve", "deny"]
 
     with {:ok, profile_options} <- resolve(config, "scheduled/" <> payload["profile"]),
+         :ok <- effort_model_matches(payload, profile_options),
          {:ok, extra} <-
            Zekkyou.ParentRuns.options(profile_options, name, payload, approval_resume?) do
       opts = [owner: self()] ++ extra
+
+      opts =
+        if payload["reasoning_effort"],
+          do: Keyword.put(opts, :reasoning_effort, payload["reasoning_effort"]),
+          else: opts
+
       opts = if payload["cwd"], do: Keyword.put(opts, :cwd, payload["cwd"]), else: opts
 
       opts =
@@ -474,6 +510,15 @@ defmodule Zekkyou.Tasks do
       {:ok, opts}
     end
   end
+
+  defp effort_model_matches(%{"reasoning_effort" => effort} = payload, options)
+       when is_binary(effort) do
+    if payload["reasoning_model"] == Zekkyou.Effort.model(options),
+      do: :ok,
+      else: {:error, :reasoning_model_changed}
+  end
+
+  defp effort_model_matches(_, _), do: :ok
 
   defp await_run(registry, run, session) do
     case Runs.run_result(registry, run) do
@@ -576,6 +621,7 @@ defmodule Zekkyou.Tasks do
       %{
         "id" => id,
         "profile" => payload["profile"],
+        "reasoning_effort" => payload["reasoning_effort"],
         "workspace_id" => payload["workspace_id"],
         "cwd" => payload["cwd"] || state.config.workspace,
         "task" => payload["task"],

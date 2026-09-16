@@ -182,6 +182,24 @@ defmodule Zekkyou.TUI.AppTest do
     assert {:noreply, _, render?: false} = App.handle_info(:tui_activity_tick, idle)
   end
 
+  test "effort command opens a capability picker and selection dispatches the chosen value" do
+    {:ok, state} = App.mount(console_module: Console, test_mode: {140, 40})
+    {:noreply, state} = App.handle_event(%Key{code: "g", modifiers: ["ctrl"]}, state)
+    {:noreply, state} = App.handle_event(%Key{code: "e"}, state)
+    assert state.pending_action == :efforts
+    ref = state.pending.ref
+    assert_receive {^ref, {model, :efforts}}, 1000
+    model = Map.put(model, :effort_catalog, %{"efforts" => ["low", "high"]})
+    {:noreply, state} = App.handle_info({ref, {model, :efforts}}, state)
+    assert state.effort_picker.choices == [nil, "low", "high"]
+    {:noreply, state} = App.handle_event(%Key{code: "down"}, state)
+    {:noreply, state} = App.handle_event(%Key{code: "enter"}, state)
+    assert state.pending_action == {:effort, "low"}
+    ref = state.pending.ref
+    assert_receive {^ref, {model, action}}, 1000
+    App.handle_info({ref, {model, action}}, state)
+  end
+
   test "context scrolling clamps at the last wrapped text row" do
     {:ok, state} = App.mount(console_module: Console, test_mode: {140, 40})
 

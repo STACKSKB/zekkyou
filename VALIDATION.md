@@ -1,7 +1,7 @@
 # Development checkpoint — 2026-09-10
 
 Current Alto source: published commit
-`d5c7de2c99f85f6ab0498de8863eae78ef10e6e8`, pinned in both the service and
+`3e5a9422ca2a635f5d8412eea2676d26752e9b73`, pinned in both the service and
 terminal dependency declarations and lockfiles. Fresh builds use the Git
 dependency directly. The sections below retain earlier development checkpoints;
 the latest validation is recorded at the end.
@@ -754,3 +754,47 @@ Both dependency declarations and lockfiles use the published revision.
   to the Alto and Alto TUI Git revisions.
 
 Restart both TUIs to load this change.
+
+## 2026-09-16 — symmetric selection, activity and reasoning controls
+
+Alto `3e5a9422ca2a635f5d8412eea2676d26752e9b73` is published on main and
+pinned in the service and terminal package declarations and lockfiles. Scroll
+speed and activity feedback were committed separately from reasoning controls.
+
+- Selection scrolls one row per tick in both directions. The previous distance
+  acceleration was asymmetric in practice because there is more screen space
+  below the conversation pane than above it.
+- A conversation-border indicator animates and shows elapsed time while waiting
+  for connections, model output, service responses or tool work. It is outside
+  the default selectable content. Reasoning events update the stage to thinking.
+- Alto uses Ctrl+G R for effort; Zekkyou uses Ctrl+G E, retaining R for reconnect.
+  Choices come from model capabilities, including a cold catalog fetch in Alto.
+  Provider default remains available, and unknown capabilities are not guessed.
+- Zekkyou discovers capabilities on the service host. The service checks selected
+  effort values at admission, records them with queued tasks, and supplies them
+  to the configured provider. A follow-up can change effort without discarding
+  earlier provider reasoning. Providerless profiles have no effort choices.
+- OpenAI-compatible reasoning/summary deltas and Codex reasoning summaries appear
+  separately from answers. Native Anthropic thinking is shown when the complete
+  response arrives; that adapter remains non-streaming. Encrypted/redacted fields
+  are not displayed. Signed provider content and reasoning fields survive tool
+  turns, saved history and reconnects.
+
+Validation against the published dependencies, without ALTO_PATH:
+
+- Alto full suite: 926 tests passed.
+- Zekkyou service full suite: 110 tests passed.
+- Zekkyou TUI full suite: 28 tests passed.
+- HTTP adapter fixtures check request fields and reasoning deltas; a fake Codex
+  app server verifies effort and summary parameters. Real local socket service
+  tests exercise effort rejection, execution, changed effort on follow-up,
+  streaming reasoning and reconnect replay. No paid provider calls were made.
+- Formatting/whitespace checks passed. Lockfile changes contain only the Alto /
+  Alto TUI Git revisions.
+
+API references used for the adapter contracts:
+[OpenRouter reasoning](https://openrouter.ai/docs/guides/best-practices/reasoning-tokens),
+[Codex App Server](https://developers.openai.com/codex/app-server/),
+[Anthropic effort](https://platform.claude.com/docs/en/build-with-claude/effort).
+
+Restart the service and both terminal clients to load these changes.

@@ -20,6 +20,7 @@ defmodule Zekkyou.TUI.App do
        console: console,
        draft: "",
        workspace_form: nil,
+       effort_picker: nil,
        leader?: false,
        focus: :composer,
        scroll: 0,
@@ -53,6 +54,7 @@ defmodule Zekkyou.TUI.App do
         scroll: state.scroll,
         details_scroll: state.details_scroll,
         workspace_form: state.workspace_form,
+        effort_picker: state.effort_picker,
         leader?: state.leader?
       })
 
@@ -123,6 +125,7 @@ defmodule Zekkyou.TUI.App do
         scroll: state.scroll,
         details_scroll: state.details_scroll,
         workspace_form: state.workspace_form,
+        effort_picker: state.effort_picker,
         leader?: state.leader?
       })
 
@@ -193,6 +196,8 @@ defmodule Zekkyou.TUI.App do
     end
   end
 
+  defp selection_pane(%{effort_picker: picker}, _) when not is_nil(picker), do: nil
+
   defp selection_pane(%{workspace_form: form}, _) when not is_nil(form), do: nil
 
   defp selection_pane(state, {x, y}) do
@@ -244,6 +249,29 @@ defmodule Zekkyou.TUI.App do
       else: route_event(%Paste{content: content}, state)
   end
 
+  defp route_event(%Key{code: code}, %{effort_picker: picker} = state) when not is_nil(picker) do
+    case code do
+      "esc" ->
+        {:noreply, %{state | effort_picker: nil}}
+
+      "up" ->
+        {:noreply, %{state | effort_picker: %{picker | index: max(picker.index - 1, 0)}}}
+
+      "down" ->
+        {:noreply,
+         %{
+           state
+           | effort_picker: %{picker | index: min(picker.index + 1, length(picker.choices) - 1)}
+         }}
+
+      "enter" ->
+        dispatch(%{state | effort_picker: nil}, {:effort, Enum.at(picker.choices, picker.index)})
+
+      _ ->
+        {:noreply, state}
+    end
+  end
+
   defp route_event(%Key{} = event, %{workspace_form: form} = state) when not is_nil(form),
     do: workspace_result(state, WorkspaceForm.key(form, event))
 
@@ -254,6 +282,7 @@ defmodule Zekkyou.TUI.App do
     state = %{state | leader?: false}
 
     case String.downcase(code || "") do
+      "e" -> dispatch(state, :efforts)
       "w" -> open_workspace_form(state)
       "n" -> dispatch(%{state | focus: :composer}, :new)
       "t" -> {:noreply, %{state | focus: :tasks}}
@@ -414,6 +443,11 @@ defmodule Zekkyou.TUI.App do
      %{
        state
        | model: model,
+         effort_picker:
+           if(action == :efforts and Map.get(model, :effort_catalog),
+             do: %{choices: [nil | model.effort_catalog["efforts"]], index: 0},
+             else: state.effort_picker
+           ),
          draft: draft,
          pending: nil,
          pending_action: nil,

@@ -10,7 +10,7 @@ Development is in progress; this is not yet the unattended-operation release.
 ## Development
 
 The dependency and lockfiles pin Alto commit
-`d5c7de2c99f85f6ab0498de8863eae78ef10e6e8`, which includes exact parent-batch
+`3e5a9422ca2a635f5d8412eea2676d26752e9b73`, which includes exact parent-batch
 continuations, independent child approvals and explicit resource retirement
 for the Serial/Stepped runners, plus shared TUI screen selection, clipboard support,
 and the folder workspace dialog.
@@ -150,10 +150,22 @@ service restart; existing tasks and resumed conversations retain their original
 folder. An SSH client uses folders on the remote host. Restart the service after
 upgrading to make its workspace and path-completion commands available.
 
+The conversation border shows animated activity and elapsed time while connecting,
+sending, waiting for a model or service, thinking, and running tools. Provider
+reasoning is shown separately as **THINKING** when readable text is supplied,
+and reappears from saved history after reconnecting.
+
+Use **Ctrl+G E** to fetch the configured service model's supported reasoning effort
+levels, then arrows and Enter to choose. The choice applies to the next submission;
+the service validates and records it with the queued task. Provider default keeps
+the service profile's configuration. The selector does not expose credentials or
+allow arbitrary model/provider changes. Restart the service after updating to
+make the new `tasks.efforts` command available.
+
 Drag to select conversation text, context data, your draft, or entered form
 values. Each drag stays inside its starting box. Hold at the top or bottom edge
 of a conversation/context pane to scroll, or use the wheel while holding the drag.
-Moving farther beyond the edge scrolls faster; moving inside or releasing stops.
+Both directions scroll at the same speed; moving inside or releasing stops.
 Copy preserves the full selected range, including text now off-screen. Controls, titles, status bars,
 and placeholder hints are excluded by default; **Alt+drag** explicitly opts into
 UI text. **Ctrl+C** or **Alt+C** copies, and **right-click without Shift** opens

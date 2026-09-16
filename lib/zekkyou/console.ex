@@ -32,6 +32,9 @@ defmodule Zekkyou.Console do
             history_trimmed: false,
             transcript_trimmed: false,
             history_more: false,
+            effort_catalog: nil,
+            selected_effort: nil,
+            live_entries: %{},
             live: %{}
 
   def new(opts \\ []), do: %__MODULE__{opts: opts}
@@ -75,6 +78,7 @@ defmodule Zekkyou.Console do
             connection: "connected",
             approvals: %{},
             live: %{},
+            live_entries: %{},
             notice: "Connected"
         }
 
@@ -144,6 +148,40 @@ defmodule Zekkyou.Console do
     })
   end
 
+  defp do_perform(model, :efforts, _owner) do
+    task = selected(model)
+    profile = (task && task.config) || Keyword.get(model.opts, :profile, "coding")
+    info = task_command(model.client, "efforts", %{"profile" => profile})
+
+    same_model? =
+      model.effort_catalog && model.effort_catalog["profile"] == profile &&
+        model.effort_catalog["model"] == info["model"]
+
+    selected =
+      if same_model? && model.selected_effort in info["efforts"],
+        do: model.selected_effort,
+        else: nil
+
+    %{
+      model
+      | effort_catalog: Map.put(info, "profile", profile),
+        selected_effort: selected,
+        notice: ""
+    }
+  end
+
+  defp do_perform(model, {:effort, value}, _owner) do
+    if value == nil or (model.effort_catalog && value in model.effort_catalog["efforts"]) do
+      %{
+        model
+        | selected_effort: value,
+          notice: "Effort: #{value || "provider default"} · next turn"
+      }
+    else
+      %{model | notice: "Effort is not supported by this model"}
+    end
+  end
+
   defp do_perform(model, :poll, _owner), do: refresh(model)
 
   defp do_perform(model, {:submit, text}, _owner) do
@@ -174,6 +212,12 @@ defmodule Zekkyou.Console do
         profile = (task && task.config) || Keyword.get(model.opts, :profile, "coding")
         workspace_id = if task, do: Map.get(task, :workspace_id), else: model.workspace_id
         payload = %{"profile" => profile, "task" => text, "workspace_id" => workspace_id}
+
+        payload =
+          if model.selected_effort && model.effort_catalog &&
+               model.effort_catalog["profile"] == profile,
+             do: Map.put(payload, "reasoning_effort", model.selected_effort),
+             else: payload
 
         payload =
           if task && task.session_id,
@@ -488,11 +532,34 @@ defmodule Zekkyou.Console do
     do: %{
       model
       | approvals: Map.reject(model.approvals, fn {_, a} -> a["run_id"] == run end),
-        live: Map.delete(model.live, run)
+        live: Map.delete(model.live, run),
+        live_entries: Map.delete(model.live_entries, run)
     }
 
-  defp notification(model, %{"type" => "event", "run_id" => run, "event" => event}),
-    do: %{model | live: Map.put(model.live, run, clean(event["type"]))}
+  defp notification(model, %{"type" => "event", "run_id" => run, "event" => event}) do
+    model = %{model | live: Map.put(model.live, run, clean(event["type"]))}
+
+    case event do
+      %{"type" => "model_started"} ->
+        %{model | live_entries: Map.delete(model.live_entries, run)}
+
+      %{"type" => type, "data" => %{"text" => text}}
+      when type in ["model_delta", "model_reasoning_delta"] and is_binary(text) ->
+        kind = if type == "model_delta", do: :assistant, else: :reasoning
+        entries = Map.get(model.live_entries, run, [])
+
+        entries =
+          case List.pop_at(entries, -1) do
+            {%{kind: ^kind} = last, rest} -> rest ++ [%{last | text: clean(last.text <> text)}]
+            _ -> entries ++ [%{kind: kind, text: clean(text)}]
+          end
+
+        %{model | live_entries: Map.put(model.live_entries, run, Enum.take(entries, -100))}
+
+      _ ->
+        model
+    end
+  end
 
   defp notification(_model, %{"type" => "overflow"} = event),
     do: throw({:console, {:notification_overflow, event["run_id"], event["domain"]}})
@@ -519,14 +586,29 @@ defmodule Zekkyou.Console do
     conversation =
       model.transcript
       |> Enum.reject(&(&1["role"] == "system"))
-      |> Enum.map(
-        &%{kind: &1["role"] || "message", text: clean(&1["content"] || &1["tool_calls"])}
-      )
+      |> Enum.flat_map(fn message ->
+        Alto.Reasoning.entries(message) ++
+          [
+            %{
+              kind: message["role"] || "message",
+              text: clean(message["content"] || message["tool_calls"])
+            }
+          ]
+      end)
 
-    activity =
-      Enum.map(model.history, &history_entry(&1, conversation == [])) |> Enum.reject(&is_nil/1)
+    activity = Enum.flat_map(model.history, &List.wrap(history_entry(&1, conversation == [])))
+    live = if task, do: Map.get(model.live_entries, task.run_id, []), else: []
 
-    entries = conversation ++ activity
+    live =
+      Enum.reject(live, fn entry ->
+        Enum.any?(
+          Enum.take(conversation, -2),
+          &(to_string(&1.kind) == to_string(entry.kind) and &1.text == entry.text)
+        )
+      end)
+
+    entries = conversation ++ activity ++ live
+
     entries = if entries == [] and task, do: [%{kind: :user, text: task.title}], else: entries
 
     notices =
@@ -578,7 +660,9 @@ defmodule Zekkyou.Console do
   end
 
   defp history_entry(%{"event" => "model_completed", "data" => data}, true),
-    do: %{kind: :assistant, text: clean(data["message"])}
+    do:
+      Alto.Reasoning.entries(%{"reasoning" => data["reasoning"]}) ++
+        [%{kind: :assistant, text: clean(data["message"])}]
 
   defp history_entry(%{"event" => "model_completed"}, false), do: nil
 
@@ -636,6 +720,9 @@ defmodule Zekkyou.Console do
 
     %{model | notice: notice}
   end
+
+  defp failed(model, :efforts, {:server, _, _} = reason),
+    do: %{model | effort_catalog: nil, notice: "Could not load effort choices: #{clean(reason)}"}
 
   defp failed(model, action, {:server, _, _} = reason) when action != :connect,
     do: %{model | notice: "Request rejected: #{clean(reason)}"}
