@@ -1,7 +1,7 @@
 # Development checkpoint — 2026-09-10
 
 Current Alto source: published commit
-`3e33c0ee10428d61894d97514a22c8c4d8fc9a87`, pinned in both the service and
+`f1dcffedae3f1033c553621f8fd411a83f45a5ce`, pinned in both the service and
 terminal dependency declarations and lockfiles. Fresh builds use the Git
 dependency directly. The sections below retain earlier development checkpoints;
 the latest validation is recorded at the end.
@@ -685,3 +685,48 @@ Validation:
   for these terminal-only changes.
 
 Relaunch both terminal clients to load the fixes.
+
+
+## 2026-09-16 — selection capture, bounded scrolling and folder commands
+
+Alto `f1dcffedae3f1033c553621f8fd411a83f45a5ce` is published on main and pinned
+in both Zekkyou dependency declarations and lockfiles. Each major change was
+committed separately in Alto and in the downstream client.
+
+- First-run model discovery loads provider modules before checking optional
+  callbacks. A cold-provider regression reproduces the previous false error.
+- Selection exports compact screen text, freezes mutable inputs, indexes only
+  boundary rows during dragging and reuses native capture buffers. Large plain
+  paragraphs are cropped to their visible viewport so motion does not reflow
+  off-screen history. Pane boundaries, Unicode and content-only defaults remain.
+- Context scrolling uses the renderer's exact wrapping to cap offsets. Zekkyou
+  also supports bounded context wheel scrolling and caps conversation scrolling.
+- Ctrl+G N and the New task rail action start in the current folder. Folder
+  changes use Ctrl+G W; Alto's task picker also offers a New task action. The
+  separate F7 workspace shortcut and prominent New workspace action are removed.
+- The folder picker highlights directory suggestions and completes with Tab.
+  Zekkyou's new projects.complete command resolves paths on the service host;
+  requests run asynchronously, and stale responses cannot replace newer input.
+
+Validation:
+
+- Alto TUI, provider discovery and CLI onboarding: 83 tests passed together.
+- Zekkyou TUI: 25 tests passed against the published Git pin without ALTO_PATH,
+  including bounded context scrolling, direct task
+  creation, remote suggestions and stale-response rejection.
+- Affected Zekkyou service/console tests: 9 tests passed against the published
+  Git pin without ALTO_PATH, including real socket
+  path completion and unchanged task-folder execution/persistence behavior.
+- Published selection benchmark: at 240×70, first capture was 3.5 ms; reused
+  mouse-down plus draw was 2.8 ms, with 1.3 ms median drag frames. At 400×120,
+  first capture was 8.8 ms and reused mouse-down plus draw was 7.2 ms; median
+  dragging was 3.7 ms. Measurements vary with host load and exclude terminal
+  emulator display latency; the script reports first capture separately.
+- A 10,000-line scrolled transcript previously took 39 ms per drag render.
+  Caching its visible paragraph reduced that to 1.2 ms, similar to short history.
+  Its first capture still took about 51 ms; that work no longer repeats while
+  dragging. This remains a limitation for exceptionally long transcripts.
+- Formatting and whitespace checks passed. Dependency lockfile changes are
+  limited to the Alto / Alto TUI Git revisions.
+
+Restart the TUIs and the Zekkyou service to enable service-host path completion.

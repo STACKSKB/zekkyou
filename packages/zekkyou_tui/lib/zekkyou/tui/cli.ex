@@ -5,12 +5,13 @@ defmodule Zekkyou.TUI.CLI do
   Usage: zekkyou-tui [--socket PATH] [--profile PROFILE]
          zekkyou-tui --ssh HOST --remote-socket PATH [--port N] [--profile PROFILE]
 
-  F7 opens a new workspace in an existing folder on the service host.
+  Ctrl+G then N starts a task; Ctrl+G then W opens a folder on the service host.
+  In the folder picker, arrows highlight suggestions and Tab completes paths.
   Tab focuses tasks or composer; arrows select tasks; Enter sends a message.
   Ctrl+Q detaches, Ctrl+R reconnects, Ctrl+N starts a new task, Ctrl+K cancels.
   Ctrl+A approves the displayed request, Ctrl+D denies. Page Up/Down scroll.
-  Drag anywhere to select; Ctrl+C or Alt+C copies; Esc clears selection.
-  Ctrl+Shift+A selects the visible screen. Use terminal paste or Ctrl+V to paste.
+  Drag content to select; Alt+drag includes controls; Ctrl+C or Alt+C copies; Esc clears selection.
+  Ctrl+Shift+A selects visible content. Use terminal paste or Ctrl+V to paste.
   """
 
   def main(argv) do

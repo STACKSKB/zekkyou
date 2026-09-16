@@ -10,7 +10,7 @@ Development is in progress; this is not yet the unattended-operation release.
 ## Development
 
 The dependency and lockfiles pin Alto commit
-`3e33c0ee10428d61894d97514a22c8c4d8fc9a87`, which includes exact parent-batch
+`f1dcffedae3f1033c553621f8fd411a83f45a5ce`, which includes exact parent-batch
 continuations, independent child approvals and explicit resource retirement
 for the Serial/Stepped runners, plus shared TUI screen selection, clipboard support,
 and the folder workspace dialog.
@@ -135,18 +135,20 @@ composer; arrows select tasks, Enter sends, and Page Up/Down scroll activity.
 Ctrl+N starts a new task, Ctrl+K requests cancellation, Ctrl+A approves the
 shown decision, and Ctrl+D denies it. New approvals open at the top of the
 context pane and display readable commands, folders, reasons and execution limits.
-In narrow terminals, the approval appears above conversation history. For a task
+In narrow terminals, the approval appears above conversation history. Context
+and conversation scrolling stop at their last useful wrapped row. For a task
 requiring operator review, inspect its evidence and enter `/retry NOTE`, `/committed NOTE`, or `/failed NOTE`
 in the composer. Decisions are revision-fenced across clients. Ctrl+Q detaches.
-Press **F7** or click **+ New workspace** above the task list to open another
-existing folder. Enter a path on the **service host**; relative paths start at
+Press **Ctrl+G, N** or click **+ New task** to start in the current folder.
+Use **Ctrl+G, W** to open another existing folder. Enter a path on the **service host**; relative paths start at
 its configured default workspace, and `~` uses the service account's home.
-Up/Down recalls saved folders in the dialog.
+Up/Down highlights folder suggestions; Tab completes the highlighted path and
+lists subfolders. Suggestions come from the service host, including over SSH.
 Opening a workspace preserves your draft and prepares a new task. The details
 pane shows the full working folder. Workspaces and queued folder choices survive
 service restart; existing tasks and resumed conversations retain their original
 folder. An SSH client uses folders on the remote host. Restart the service after
-upgrading to make its workspace commands available.
+upgrading to make its workspace and path-completion commands available.
 
 Drag to select conversation text, context data, your draft, or entered form
 values. Each drag stays inside its starting box. Controls, titles, status bars,

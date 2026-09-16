@@ -49,10 +49,12 @@ work before a run exists, retains task identity across restart, and supports
 cancellation of queued and running work. Follow-ups create new durable tasks
 using the selected task's completed session as context.
 
-In the TUI, F7 opens an existing folder as a workspace on the service host.
+In the TUI, Ctrl+G W opens an existing folder on the service host, with
+highlighted suggestions and Tab completion. Ctrl+G N starts a task in the current
+folder without opening the folder picker.
 The service registers that folder and persists its identity and working path in
-each new task, including delayed work. The private transport's `projects.list`
-and `projects.open` commands list and register folders; `tasks.submit` accepts
+each new task, including delayed work. The private transport's `projects.list`,
+`projects.complete` and `projects.open` commands list, complete and register folders; `tasks.submit` accepts
 `workspace_id` from that catalog. It does not accept arbitrary execution options.
 A resumed session keeps its recorded folder, and a conflicting explicit workspace
 is rejected. Without a chosen workspace, new work uses the profile's configured
