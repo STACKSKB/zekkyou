@@ -12,6 +12,7 @@ defmodule Zekkyou.TUI.App do
     console = Keyword.get(opts, :console_module, Zekkyou.Console)
     send(self(), :connect)
     Process.send_after(self(), :zekkyou_poll, 500)
+    Process.send_after(self(), :tui_activity_tick, 250)
 
     {:ok,
      %{
@@ -24,6 +25,10 @@ defmodule Zekkyou.TUI.App do
        scroll: 0,
        details_scroll: 0,
        pending: nil,
+       pending_action: :connect,
+       pending_started_ms: System.system_time(:millisecond),
+       activity_tick: 0,
+       activity_started_ms: System.system_time(:millisecond),
        submitted_draft: nil,
        dimensions: Keyword.get(opts, :test_mode) || terminal_dimensions(),
        selection: Selection.new(),
@@ -54,7 +59,56 @@ defmodule Zekkyou.TUI.App do
     Selection.widgets(
       state.selection,
       fn -> View.widgets(view, %Rect{width: frame.width, height: frame.height}) end
+    ) ++ activity_widgets(state, frame)
+  end
+
+  defp activity_widgets(state, frame) do
+    rect = Alto.TUI.Layout.calculate(frame.width, frame.height).transcript
+
+    Alto.TUI.Activity.widgets(
+      activity_label(state),
+      state.activity_started_ms,
+      state.activity_tick,
+      rect
     )
+  end
+
+  defp activity_label(state) do
+    task = Enum.find(Map.get(state.model, :tasks, []), &(&1.id == state.model.selected_id))
+
+    cond do
+      state.pending_action == :connect ->
+        "waiting for connection"
+
+      match?({:submit, _}, state.pending_action) ->
+        "sending message"
+
+      state.pending != nil and state.pending_action != :poll ->
+        "waiting for service"
+
+      task &&
+          task.status in [
+            "running",
+            "waiting",
+            "waiting_approval",
+            "queued",
+            "claimed",
+            "awaiting_admission"
+          ] ->
+        fallback =
+          if task.status == "waiting_approval",
+            do: "waiting for approval",
+            else: "waiting for model"
+
+        event = Map.get(Map.get(state.model, :live, %{}), Map.get(task, :run_id))
+        Alto.TUI.Activity.phase(event, fallback)
+
+      state.pending != nil and System.system_time(:millisecond) - state.pending_started_ms > 1500 ->
+        "waiting for service"
+
+      true ->
+        nil
+    end
   end
 
   @impl true
@@ -307,6 +361,12 @@ defmodule Zekkyou.TUI.App do
 
   def handle_info({:tui_deferred_input, event}, state), do: handle_event(event, state)
 
+  def handle_info(:tui_activity_tick, state) do
+    Process.send_after(self(), :tui_activity_tick, 250)
+    next = %{state | activity_tick: state.activity_tick + 1}
+    {:noreply, next, render?: activity_label(state) != nil}
+  end
+
   def handle_info({:tui_selection_scroll, token}, state) do
     case Selection.autoscroll(state.selection, token) do
       {:scrolled, selection} -> {:noreply, apply_selection_scroll(state, selection)}
@@ -356,6 +416,7 @@ defmodule Zekkyou.TUI.App do
        | model: model,
          draft: draft,
          pending: nil,
+         pending_action: nil,
          submitted_draft: nil,
          scroll: scroll,
          details_scroll:
@@ -380,7 +441,8 @@ defmodule Zekkyou.TUI.App do
     notice =
       "Client operation failed: #{Zekkyou.Console.clean(reason)}; reconnect and inspect before resending"
 
-    {:noreply, %{state | pending: nil, model: Map.put(state.model, :notice, notice)}}
+    {:noreply,
+     %{state | pending: nil, pending_action: nil, model: Map.put(state.model, :notice, notice)}}
   end
 
   def handle_info(:connect, state), do: dispatch(state, :connect)
@@ -417,7 +479,19 @@ defmodule Zekkyou.TUI.App do
         do: state.draft,
         else: nil
 
-    {:noreply, %{state | pending: task, submitted_draft: submitted_draft}}
+    {:noreply,
+     %{
+       state
+       | pending: task,
+         pending_action: action,
+         pending_started_ms: System.system_time(:millisecond),
+         submitted_draft: submitted_draft,
+         activity_started_ms:
+           if(action == :poll,
+             do: state.activity_started_ms,
+             else: System.system_time(:millisecond)
+           )
+     }}
   end
 
   defp open_workspace_form(state) do

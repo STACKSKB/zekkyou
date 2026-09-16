@@ -171,6 +171,17 @@ defmodule Zekkyou.TUI.AppTest do
     end
   end
 
+  test "connection wait is visible before any service response and animates" do
+    {:ok, state} = App.mount(console_module: Console, test_mode: {140, 40})
+    {first, rect} = List.last(App.render(state, %{width: 140, height: 40}))
+    assert first.text =~ "waiting for connection"
+    assert {:noreply, state, render?: true} = App.handle_info(:tui_activity_tick, state)
+    {second, ^rect} = List.last(App.render(state, %{width: 140, height: 40}))
+    refute first.text == second.text
+    idle = %{state | pending_action: nil, model: Map.put(state.model, :tasks, [])}
+    assert {:noreply, _, render?: false} = App.handle_info(:tui_activity_tick, idle)
+  end
+
   test "context scrolling clamps at the last wrapped text row" do
     {:ok, state} = App.mount(console_module: Console, test_mode: {140, 40})
 
