@@ -1,7 +1,7 @@
 # Development checkpoint — 2026-09-10
 
 Current Alto source: published commit
-`e748a11453395615a50ab0e769d4f2a7df37ef5a`, pinned in both the service and
+`d2220abf489fb50283a02456a881eed86fbcaf53`, pinned in both the service and
 terminal dependency declarations and lockfiles. Fresh builds use the Git
 dependency directly. The sections below retain earlier development checkpoints;
 the latest validation is recorded at the end.
@@ -896,3 +896,21 @@ Validation:
   Alto and Alto TUI revisions.
 
 Restart the TUIs and Zekkyou service to load the new close controls and command.
+
+## Folder picker selection hints — 2026-09-16
+
+Published Alto `d2220abf489fb50283a02456a881eed86fbcaf53` and updated both
+service and TUI pins. Folder suggestions are initially unselected, including
+after typing, pasting, completion, and asynchronous suggestion loading. Down
+selects the first suggestion and Up selects the last. A disappearing remote
+choice clears selection rather than selecting an unrelated replacement.
+
+The footer states whether Enter opens the typed path or the selected folder.
+The Open folder button uses that same target. Marker spacing remains fixed as
+selection changes. The hints fit both normal and narrow dialogs.
+
+Validation: Alto TUI 99 tests passed; Zekkyou TUI 34 tests passed against the
+published dependency without ALTO_PATH. Tests cover initial unselected state,
+arrow selection, typed versus selected Enter targets, button consistency,
+selection reset after edits/completion, and asynchronous choice removal.
+Formatting and whitespace checks passed. Restart the TUIs to load the fix.

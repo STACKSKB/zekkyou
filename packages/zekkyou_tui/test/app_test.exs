@@ -435,6 +435,34 @@ defmodule Zekkyou.TUI.AppTest do
     next
   end
 
+  test "folder suggestions require explicit selection before Enter opens a suggestion" do
+    {:ok, state} = App.mount(console_module: Console, test_mode: {140, 40})
+    {:noreply, state} = App.handle_event(%Key{code: "g", modifiers: ["ctrl"]}, state)
+    {:noreply, state} = App.handle_event(%Key{code: "w"}, state)
+    {:noreply, state} = App.handle_event(%Paste{content: "/remote/"}, state)
+    revision = state.workspace_form.revision
+
+    {:noreply, state} =
+      App.handle_info(
+        {:workspace_suggestions, revision, {:ok, ["/remote/Alpha/", "/remote/Beta/"]}},
+        state
+      )
+
+    refute state.workspace_form.choose?
+    terminal = ExRatatui.init_test_terminal(140, 40)
+    ExRatatui.draw(terminal, App.render(state, %{width: 140, height: 40}))
+    assert ExRatatui.get_buffer_content(terminal) =~ "Enter opens typed path"
+    {:noreply, opening} = App.handle_event(%Key{code: "enter"}, state)
+    opened = finish_sidebar_action(opening)
+    assert opened.model.workspace_root == "/remote/"
+    {:noreply, chosen} = App.handle_event(%Key{code: "down"}, state)
+    assert chosen.workspace_form.choose?
+    assert chosen.workspace_form.suggestion_index == 0
+    {:noreply, opening} = App.handle_event(%Key{code: "enter"}, chosen)
+    opened = finish_sidebar_action(opening)
+    assert opened.model.workspace_root == "/remote/Alpha/"
+  end
+
   test "Ctrl+G W edits a folder separately from the draft and opens a new workspace" do
     {:ok, state} = App.mount(console_module: Console, test_mode: {140, 40})
     state = %{state | draft: "keep my draft"}

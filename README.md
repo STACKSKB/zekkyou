@@ -10,7 +10,7 @@ Development is in progress; this is not yet the unattended-operation release.
 ## Development
 
 The dependency and lockfiles pin Alto commit
-`e748a11453395615a50ab0e769d4f2a7df37ef5a`, which includes exact parent-batch
+`d2220abf489fb50283a02456a881eed86fbcaf53`, which includes exact parent-batch
 continuations, independent child approvals and explicit resource retirement
 for the Serial/Stepped runners, plus shared TUI screen selection, clipboard support,
 and the folder workspace dialog.
@@ -146,8 +146,10 @@ Click **+ New workspace** or use **Ctrl+G, W** to open another existing folder. 
 its configured default workspace, and `~` uses the service account's home.
 Tab extends the typed path to the longest common prefix of matching folders and
 lists the next matches: `/hom` becomes `/home/`, regardless of saved workspaces.
-Up/Down followed by Tab accepts a specific folder. Saved folders appear only with
-empty input. Suggestions come from the service host, including over SSH; a Tab
+Suggestions start unselected, and Enter opens the typed path. Down selects the
+first suggestion; Up selects the last. The Enter hint changes when a suggestion
+is selected. Typing or completing a path clears that selection. Up/Down followed
+by Tab accepts a specific folder. Saved folders appear only with empty input. Suggestions come from the service host, including over SSH; a Tab
 pressed while they load is applied when the response arrives.
 Opening a workspace preserves your draft and prepares a new task. The details
 pane shows the full working folder. Workspaces and queued folder choices survive
