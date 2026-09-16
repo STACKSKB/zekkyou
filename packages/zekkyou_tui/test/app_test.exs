@@ -81,7 +81,7 @@ defmodule Zekkyou.TUI.AppTest do
     assert state.model.selected_id == "run"
   end
 
-  test "selects and copies every visible pane using the shared Alto selection layer" do
+  test "Alt opts into copying UI text using the shared Alto selection layer" do
     owner = self()
 
     {:ok, state} =
@@ -112,7 +112,10 @@ defmodule Zekkyou.TUI.AppTest do
           geometry.status
         ] do
       {:noreply, pressed} =
-        App.handle_event(%Mouse{kind: "down", button: "left", x: rect.x, y: rect.y}, state)
+        App.handle_event(
+          %Mouse{kind: "down", button: "left", modifiers: ["alt"], x: rect.x, y: rect.y},
+          state
+        )
 
       {:noreply, selected} =
         App.handle_event(
@@ -167,13 +170,52 @@ defmodule Zekkyou.TUI.AppTest do
       App.handle_event(%Mouse{kind: "down", button: "right", x: 139, y: 39}, state)
 
     menu = state.selection.menu
-    down = %{down | x: menu.x + 2, y: menu.y + 1}
+    down = %{down | x: menu.x + 2, y: menu.y}
     {:noreply, state} = App.handle_event(down, state)
     {:noreply, copied} = App.handle_event(%{down | kind: "up"}, state)
     assert_receive {:clipboard, "first\nsecond\n"}
     assert copied.model.notice == "Copied selection"
     refute copied.selection.active?
     assert copied.pending == nil
+  end
+
+  test "default selection excludes UI labels and shows nothing until right-click" do
+    {:ok, state} = App.mount(console_module: Console, test_mode: {140, 40})
+    layout = Alto.TUI.Layout.calculate(140, 40)
+
+    for {x, y} <- [
+          {1, 1},
+          {1, 39},
+          {layout.transcript.x + 1, 0},
+          {layout.transcript.x + 1, 1},
+          {layout.composer.x + 1, layout.composer.y + 1}
+        ] do
+      down = %Mouse{kind: "down", button: "left", x: x, y: y}
+      {:noreply, pressed} = App.handle_event(down, state)
+      assert pressed.selection.snapshot == nil
+      {:noreply, dragged} = App.handle_event(%{down | kind: "up", x: x + 4}, pressed)
+      refute dragged.selection.active?
+      assert dragged.workspace_form == nil
+    end
+
+    state = %{
+      state
+      | draft: "draft text",
+        model: Map.put(state.model, :entries, [%{kind: :assistant, text: "answer text"}])
+    }
+
+    {:noreply, selected} = App.handle_event(%Key{code: "a", modifiers: ["ctrl", "shift"]}, state)
+    copied = Alto.TUI.Selection.text(selected.selection)
+    assert copied =~ "answer text"
+    assert copied =~ "draft text"
+    refute copied =~ "New workspace"
+    refute copied =~ "Composer"
+    assert selected.selection.menu == nil
+
+    {:noreply, menu} =
+      App.handle_event(%Mouse{kind: "down", button: "right", x: 70, y: 20}, selected)
+
+    assert menu.selection.menu.height == 1
   end
 
   test "system clipboard and bracketed paste use sanitized draft input from any focus" do
@@ -196,6 +238,7 @@ defmodule Zekkyou.TUI.AppTest do
 
   test "Escape clears selection before client commands and resize clears stale coordinates" do
     {:ok, state} = App.mount(console_module: Console, test_mode: {80, 24})
+    state = %{state | draft: "selectable content"}
     {:noreply, selected} = App.handle_event(%Key{code: "a", modifiers: ["ctrl", "shift"]}, state)
     assert selected.selection.active?
     assert selected.pending == nil

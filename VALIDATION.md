@@ -1,7 +1,7 @@
 # Development checkpoint — 2026-09-10
 
 Current Alto source: published commit
-`25a9445c53ea1bd1df243f5084c4f3dd6094417f`, pinned in both the service and
+`4914e0ff444dcdfb5776a9ed38aefa7dddd0acb2`, pinned in both the service and
 terminal dependency declarations and lockfiles. Fresh builds use the Git
 dependency directly. The sections below retain earlier development checkpoints;
 the latest validation is recorded at the end.
@@ -610,3 +610,37 @@ Validation:
 Relaunch the terminal client to load the updated code. Shift+right-click remains
 controlled by the terminal emulator; use right-click without Shift for the TUI's
 Copy menu.
+
+## 2026-09-16 — responsive selection and content defaults
+
+Published Alto `4914e0ff444dcdfb5776a9ed38aefa7dddd0acb2` replaces the
+per-cell drag renderer with a cached, coalesced frame and highlighted text runs.
+Both clients defer building their live view while a selection is active, so
+mouse movement does not repeatedly format conversation history. Unicode width
+probes are batched; clicks on non-selectable controls skip capture entirely.
+
+Ordinary selection includes conversation content, context data, drafts and entered
+form values. Controls, titles, status and empty-field hints require explicit
+Alt+drag. Ctrl+Shift+A also follows the content policy; adding Alt includes UI.
+Selection alone opens no toolbar or popup. Right-click opens one unframed Copy
+menu row with a dim shortcut. Esc dismisses the menu before clearing selection.
+
+Validation:
+
+- Alto TUI: 59 tests passed, including content exclusions, approval click safety,
+  Unicode/reverse drags, unchanged workspace positioning, and menu behavior.
+- Regression coverage verifies that motion/repaint never rebuild the live view
+  and that cached background spans scale with style runs, not terminal cells.
+- Zekkyou TUI: 20 tests passed against the published Git dependencies, without
+  `ALTO_PATH`. Service and terminal declarations/lockfiles use the same revision.
+- `mix run scripts/tui_selection_bench.exs` measures selection events plus native
+  drawing. At 240×70, the prior median drag frame was 32.8 ms (p95 40.6 ms).
+  Updated measurements were 2.6–3.5 ms median (p95 4.4–7.8 ms). At 160×50,
+  the median fell from 14.5 ms to 1.2–1.5 ms. Host load affects these values.
+  One-time mouse-down capture remains; these measurements do not include a
+  terminal emulator's own display latency.
+- Formatting and whitespace checks passed. This revision changes the TUIs;
+  the broader service/runtime suites were not rerun.
+
+Relaunch the TUI to use the new renderer and menu. Terminal fonts have one cell
+size; the shortcut uses a lighter, dimmed style rather than a separate font size.

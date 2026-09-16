@@ -10,7 +10,7 @@ Development is in progress; this is not yet the unattended-operation release.
 ## Development
 
 The dependency and lockfiles pin Alto commit
-`25a9445c53ea1bd1df243f5084c4f3dd6094417f`, which includes exact parent-batch
+`4914e0ff444dcdfb5776a9ed38aefa7dddd0acb2`, which includes exact parent-batch
 continuations, independent child approvals and explicit resource retirement
 for the Serial/Stepped runners, plus shared TUI screen selection, clipboard support,
 and the folder workspace dialog.
@@ -146,12 +146,14 @@ service restart; existing tasks and resumed conversations retain their original
 folder. An SSH client uses folders on the remote host. Restart the service after
 upgrading to make its workspace commands available.
 
-Drag anywhere in the TUI to select visible text. Each drag stays inside its
-starting box, excluding borders and neighboring boxes; titles and controls are
-selectable separately. Click **[ Copy ]** after selecting, press **Ctrl+C** or
-**Alt+C**, or **right-click without Shift** for the Copy menu. Esc clears selection.
-Ctrl+Shift+A selects the visible screen when the terminal forwards that chord.
-Selection holds the displayed frame still while the service continues running.
+Drag to select conversation text, context data, your draft, or entered form
+values. Each drag stays inside its starting box. Controls, titles, status bars,
+and placeholder hints are excluded by default; **Alt+drag** explicitly opts into
+UI text. **Ctrl+C** or **Alt+C** copies, and **right-click without Shift** opens
+a compact Copy menu with a muted shortcut. Selecting text opens no toolbar or
+popup. Esc dismisses the menu, then clears selection. Ctrl+Shift+A selects visible
+content; adding Alt includes UI text. Dragging reuses a cached screen and updates
+only the highlight while the service continues running.
 Copy uses `wl-copy`, `xclip`, `xsel`, or `pbcopy` when available, with OSC 52 as a
 fallback. The status distinguishes desktop copies from unconfirmed terminal
 requests. Shift+drag and Shift+right-click belong to the terminal application;

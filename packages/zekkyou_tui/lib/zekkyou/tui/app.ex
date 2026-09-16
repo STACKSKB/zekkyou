@@ -48,7 +48,7 @@ defmodule Zekkyou.TUI.App do
 
     Selection.widgets(
       state.selection,
-      View.widgets(view, %Rect{width: frame.width, height: frame.height})
+      fn -> View.widgets(view, %Rect{width: frame.width, height: frame.height}) end
     )
   end
 
@@ -66,7 +66,9 @@ defmodule Zekkyou.TUI.App do
 
     widgets = fn -> View.widgets(view, %Rect{width: width, height: height}) end
 
-    case Selection.event(state.selection, event, state.dimensions, widgets) do
+    case Selection.event(state.selection, event, state.dimensions, widgets,
+           content: fn -> View.selection_content(view, width, height) end
+         ) do
       {:pass, selection} ->
         route_event(event, %{state | selection: selection})
 

@@ -52,7 +52,7 @@ defmodule Zekkyou.TUI.View do
       end
 
     transcript = %Paragraph{
-      text: transcript_text(Map.get(state, :entries, [])) <> compact_detail(state, geometry),
+      text: conversation_text(state, geometry),
       wrap: true,
       scroll: {max(Map.get(state, :scroll, 0), 0), 0},
       block: panel("Conversation • " <> selected_title(state))
@@ -86,7 +86,7 @@ defmodule Zekkyou.TUI.View do
 
     details =
       if geometry.details do
-        detail = Map.get(state, :detail, "") |> to_string_or_empty()
+        detail = detail_text(state)
 
         [
           {%Paragraph{
@@ -124,6 +124,44 @@ defmodule Zekkyou.TUI.View do
     end
   end
 
+  @doc "Selectable task content; chrome and empty-field hints are opt-in via Alt+drag."
+  def selection_content(%{workspace_form: form}, width, height) when not is_nil(form),
+    do: WorkspaceForm.selection_content(form, width, height)
+
+  def selection_content(state, width, height) do
+    layout = Layout.calculate(width, height)
+    detail? = Map.get(state, :detail, "") not in [nil, ""]
+    tasks? = layout.rail == nil and Map.get(state, :focus) == :tasks
+
+    transcript =
+      if not tasks? and
+           (Map.get(state, :entries, []) != [] or (layout.details == nil and detail?)),
+         do: [content_rect(layout.transcript)],
+         else: []
+
+    composer =
+      if Map.get(state, :draft, "") in [nil, ""], do: [], else: [content_rect(layout.composer)]
+
+    details = if layout.details && detail?, do: [content_rect(layout.details)], else: []
+    transcript ++ composer ++ details
+  end
+
+  defp content_rect(rect),
+    do: %Rect{
+      x: rect.x + 1,
+      y: rect.y + 1,
+      width: max(rect.width - 2, 0),
+      height: max(rect.height - 2, 0)
+    }
+
+  defp conversation_text(state, geometry) do
+    text = transcript_text(Map.get(state, :entries, [])) <> compact_detail(state, geometry)
+
+    if String.trim(text) == "",
+      do: "No messages yet. Start a conversation with the composer below.",
+      else: text
+  end
+
   defp selected_title(state) do
     case Enum.find(Map.get(state, :tasks, []), &(&1.id == Map.get(state, :selected_id))) do
       nil -> "New task"
@@ -132,10 +170,27 @@ defmodule Zekkyou.TUI.View do
   end
 
   defp compact_detail(state, %{details: nil}) do
-    "\n\n" <> (Map.get(state, :detail) || "")
+    "\n\n" <> detail_text(state)
   end
 
   defp compact_detail(_state, _geometry), do: ""
+
+  # Workspace commands already live in the task rail and status bar. Keep the
+  # context body as data so ordinary selection does not copy those controls.
+  defp detail_text(state) do
+    detail = Map.get(state, :detail, "") |> to_string_or_empty()
+
+    case detail do
+      "Workspace folder\n" <> rest ->
+        case String.split(rest, "\nF7 New workspace\n\n", parts: 2) do
+          [folder, data] -> folder <> "\n\n" <> data
+          _ -> detail
+        end
+
+      _ ->
+        detail
+    end
+  end
 
   defp panel(title), do: %Block{title: title, borders: [:all], border_type: :rounded}
 
@@ -145,7 +200,7 @@ defmodule Zekkyou.TUI.View do
     if status == "", do: title, else: "#{status}  #{title}"
   end
 
-  defp transcript_text([]), do: "No messages yet. Start a conversation with the composer below."
+  defp transcript_text([]), do: ""
 
   defp transcript_text(entries) do
     entries
