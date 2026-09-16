@@ -10,7 +10,7 @@ Development is in progress; this is not yet the unattended-operation release.
 ## Development
 
 The dependency and lockfiles pin Alto commit
-`a339e5a57aefcea4b634c6fc6a8a4d3eb0029f69`, which includes exact parent-batch
+`c987a782b3d8208b9c09acf011f66a51f3ca118b`, which includes exact parent-batch
 continuations, independent child approvals and explicit resource retirement
 for the Serial/Stepped runners, plus shared TUI screen selection, clipboard support,
 and the folder workspace dialog.

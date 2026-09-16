@@ -1,7 +1,7 @@
 # Development checkpoint — 2026-09-10
 
 Current Alto source: published commit
-`a339e5a57aefcea4b634c6fc6a8a4d3eb0029f69`, pinned in both the service and
+`c987a782b3d8208b9c09acf011f66a51f3ca118b`, pinned in both the service and
 terminal dependency declarations and lockfiles. Fresh builds use the Git
 dependency directly. The sections below retain earlier development checkpoints;
 the latest validation is recorded at the end.
@@ -851,3 +851,20 @@ Validation:
   changed in the lockfiles.
 
 Restart the terminal clients to load the updated sidebar.
+
+## Shift-modified folder input — 2026-09-16
+
+Published Alto `c987a782b3d8208b9c09acf011f66a51f3ca118b` and updated both pins
+and lockfiles. The shared folder field previously accepted only key events with
+no modifiers, silently discarding Shift-modified capitals and symbols. It now
+accepts Shift while preserving the exact character supplied by the terminal;
+Ctrl, Alt, and other command modifiers remain excluded from text insertion.
+
+The regression tests failed before the fix (`Project_É` became `roject`). Tests
+now exercise typed key events, including uppercase and Unicode characters,
+shifted punctuation, unmodified uppercase input, case-sensitive completion, and
+opening a mixed-case folder through both TUIs instead of relying on paste.
+
+Validation: Alto TUI 95 tests passed; Zekkyou TUI 31 tests passed against the
+published dependency without ALTO_PATH. Formatting and whitespace checks passed.
+Restart the terminal clients to load the fix.

@@ -397,14 +397,25 @@ defmodule Zekkyou.TUI.AppTest do
     {:noreply, state} = App.handle_event(%Key{code: "g", modifiers: ["ctrl"]}, state)
     {:noreply, state} = App.handle_event(%Key{code: "w"}, state)
     assert state.workspace_form.host == "the service host"
-    {:noreply, state} = App.handle_event(%Paste{content: "/another/project"}, state)
+
+    state =
+      Enum.reduce(String.graphemes("/Another/Project!"), state, fn code, state ->
+        modifiers = if code in ["A", "P", "!"], do: ["shift"], else: []
+
+        {:noreply, next} =
+          App.handle_event(%Key{code: code, kind: "press", modifiers: modifiers}, state)
+
+        next
+      end)
+
+    assert Alto.TUI.WorkspaceForm.path(state.workspace_form) == "/Another/Project!"
     assert state.draft == "keep my draft"
     {:noreply, state} = App.handle_event(%Key{code: "enter"}, state)
     ref = state.pending.ref
-    assert_receive {^ref, {model, {:workspace, "/another/project"}}}
-    {:noreply, state} = App.handle_info({ref, {model, {:workspace, "/another/project"}}}, state)
+    assert_receive {^ref, {model, {:workspace, "/Another/Project!"}}}
+    {:noreply, state} = App.handle_info({ref, {model, {:workspace, "/Another/Project!"}}}, state)
     assert state.workspace_form == nil
-    assert state.model.workspace_root == "/another/project"
+    assert state.model.workspace_root == "/Another/Project!"
     assert state.model.selected_id == nil
     assert state.draft == "keep my draft"
     assert state.focus == :composer
