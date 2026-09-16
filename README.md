@@ -10,7 +10,7 @@ Development is in progress; this is not yet the unattended-operation release.
 ## Development
 
 The dependency and lockfiles pin Alto commit
-`901529e46cd94de498e8400881032631d823e323`, which includes exact parent-batch
+`fade95e64689ea511c924db5a6b206cf5416b94e`, which includes exact parent-batch
 continuations, independent child approvals and explicit resource retirement
 for the Serial/Stepped runners, plus shared TUI screen selection, clipboard support,
 and the folder workspace dialog.
@@ -241,3 +241,8 @@ The executable smoke check uses real files and independent service/client VMs,
 including a service restart. See [validation results](VALIDATION.md).
 Real provider, SSH and Discord qualification is tracked separately in the
 roadmap. No hosted CI or publishing is performed by this development work.
+
+Tool rows identify the file or command, show Git output, and display applied
+edit/write diffs with normal line breaks. Long transcripts use cached wrapping
+for selection and scrolling. Cache diagnostics separate the latest request from
+cumulative usage; OpenRouter requests carry a stable session ID for cache affinity.

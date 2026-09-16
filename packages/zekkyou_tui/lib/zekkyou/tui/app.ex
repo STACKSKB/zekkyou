@@ -60,7 +60,10 @@ defmodule Zekkyou.TUI.App do
 
     Selection.widgets(
       state.selection,
-      fn -> View.widgets(view, %Rect{width: frame.width, height: frame.height}) end
+      fn ->
+        View.widgets(view, %Rect{width: frame.width, height: frame.height})
+        |> Alto.TUI.Viewport.widgets()
+      end
     ) ++ activity_widgets(state, frame)
   end
 

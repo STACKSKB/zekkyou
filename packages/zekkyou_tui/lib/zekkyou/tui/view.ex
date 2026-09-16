@@ -419,6 +419,20 @@ defmodule Zekkyou.TUI.View do
   defp transcript_text([]), do: ""
 
   defp transcript_text(entries) do
+    key = {__MODULE__, :transcript_text}
+
+    case Process.get(key) do
+      {^entries, text} ->
+        text
+
+      _ ->
+        text = format_transcript(entries)
+        Process.put(key, {entries, text})
+        text
+    end
+  end
+
+  defp format_transcript(entries) do
     entries
     |> Enum.map(fn entry ->
       kind = entry |> Map.get(:kind, :message) |> to_string_or_empty() |> String.upcase()
@@ -431,7 +445,14 @@ defmodule Zekkyou.TUI.View do
           _ -> to_string_or_empty(value)
         end
 
-      "#{if kind == "REASONING", do: "THINKING", else: kind}: #{text}"
+      detail =
+        case Map.get(entry, :detail) do
+          nil -> ""
+          "" -> ""
+          value -> "\n" <> Alto.ToolDisplay.detail(value)
+        end
+
+      "#{if kind == "REASONING", do: "THINKING", else: kind}: #{text}" <> detail
     end)
     |> Enum.join("\n")
   end

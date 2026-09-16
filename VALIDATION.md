@@ -1,7 +1,7 @@
 # Development checkpoint — 2026-09-10
 
 Current Alto source: published commit
-`901529e46cd94de498e8400881032631d823e323`, pinned in both the service and
+`fade95e64689ea511c924db5a6b206cf5416b94e`, pinned in both the service and
 terminal dependency declarations and lockfiles. Fresh builds use the Git
 dependency directly. The sections below retain earlier development checkpoints;
 the latest validation is recorded at the end.
@@ -938,3 +938,43 @@ Validation:
   the Alto and Alto TUI revisions.
 
 Restart the TUIs to load the updated presentation.
+
+
+## Tool details, selection performance, and context caching — 2026-09-16
+
+Published Alto `fade95e64689ea511c924db5a6b206cf5416b94e` and updated both
+service/TUI pins and lockfiles. Live tool rows identify their file, command,
+Git action, or revision and update in place. Restored transcript tool results
+are paired with their original calls. Edit/write results retain bounded applied
+unified diffs; command and Git output render with actual line breaks in the
+transcript. Internal handoff/reducer streams emit context-progress events rather
+than leaking their serialized JSON into assistant text.
+
+The shared viewport caches native word wrapping in chunks and draws only visible
+rows. Native-cell tests compare Unicode, blank lines, and chunk boundaries.
+In Alto's 240x70, 10,000-line workload benchmark, warmed selection starts measured
+11–15 ms and autoscroll 10–14 ms, versus 137 ms and 80 ms before the fix. These
+are application-processing measurements, excluding terminal-emulator latency.
+
+Ordinary requests retain the stored system prompt and append conversation history.
+OpenRouter now receives a stable session ID; Claude requests opt into automatic
+prefix caching. Usage-aware context admission uses the observed provider count
+for an exactly unchanged prefix plus conservative suffix bytes, avoiding early
+compaction caused by recounting the entire prefix as bytes. The agentic Alto
+profile and Zekkyou service example enable that policy. Explicit custom tokenizers
+take precedence; missing observations and changed prefixes use the byte fallback.
+Cache displays distinguish the latest request from cumulative usage. Provider
+routing, expiry, model changes and compaction can still cause cache misses.
+
+Validation:
+
+- Alto full suite: 1,033 tests run. One expected usage-map assertion was updated;
+  two timing-sensitive tests failed under load. All three passed on targeted
+  rerun with reduced concurrency. No remaining test failures.
+- Zekkyou service: 113 tests passed against the published dependency.
+- Zekkyou TUI: 36 tests passed against the published dependency, including rendered
+  file targets, applied diffs, Git stats, and unescaped multiline output.
+- Formatting and whitespace checks passed. Lockfile changes are limited to the
+  Alto and Alto TUI revisions.
+
+Restart the TUIs and Zekkyou service to load the new event and display behavior.

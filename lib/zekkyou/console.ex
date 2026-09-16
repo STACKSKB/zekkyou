@@ -607,6 +607,14 @@ defmodule Zekkyou.Console do
       %{"type" => "model_started"} ->
         %{model | live_entries: Map.delete(model.live_entries, run)}
 
+      %{"type" => type, "data" => data}
+      when type in ["tool_started", "tool_completed", "tool_failed"] ->
+        key = data["operation_id"] || data["call_id"]
+        entry = Map.put(Alto.ToolDisplay.entry(type, data), :tool_key, key)
+        entries = Map.get(model.live_entries, run, [])
+        entries = Enum.reject(entries, &(Map.get(&1, :tool_key) == key)) ++ [entry]
+        %{model | live_entries: Map.put(model.live_entries, run, Enum.take(entries, -100))}
+
       %{"type" => type, "data" => %{"text" => text}}
       when type in ["model_delta", "model_reasoning_delta"] and is_binary(text) ->
         kind = if type == "model_delta", do: :assistant, else: :reasoning
@@ -647,22 +655,7 @@ defmodule Zekkyou.Console do
   defp present(model) do
     task = selected(model)
 
-    conversation =
-      model.transcript
-      |> Enum.reject(&(&1["role"] == "system"))
-      |> Enum.flat_map(fn message ->
-        Alto.Reasoning.entries(message) ++
-          [
-            %{
-              kind: message["role"] || "message",
-              text:
-                if(message["role"] == "tool" or not is_binary(message["content"]),
-                  do: Alto.Display.result(message["content"] || message["tool_calls"]),
-                  else: clean(message["content"])
-                )
-            }
-          ]
-      end)
+    conversation = Alto.ToolDisplay.transcript(model.transcript)
 
     activity = Enum.flat_map(model.history, &List.wrap(history_entry(&1, conversation == [])))
     live = if task, do: Map.get(model.live_entries, task.run_id, []), else: []
@@ -713,7 +706,7 @@ defmodule Zekkyou.Console do
               "\nUpgrade: resolve this approval with the previous version, or cancel after reviewing completed effects.",
             else: ""
 
-        "#{task.status}\nTask: #{task.id}\nProfile: #{clean(task.config)}\nSession: #{task.session_id}\nRun: #{task.run_id || "not resident"}\nUsage: #{clean(task.usage)}\n#{Map.get(model.live, task.run_id, "")}#{approval}#{review}#{upgrade}"
+        "#{task.status}\nTask: #{task.id}\nProfile: #{clean(task.config)}\nSession: #{task.session_id}\nRun: #{task.run_id || "not resident"}\nUsage: #{clean(task.usage)}\nCache: #{Float.round(Alto.Usage.last_cache_hit_rate(task.usage), 1)}% last / #{Float.round(Alto.Usage.cache_hit_rate(task.usage), 1)}% total\n#{Map.get(model.live, task.run_id, "")}#{approval}#{review}#{upgrade}"
       else
         "New task\nProfile: #{clean(Keyword.get(model.opts, :profile, "coding"))}"
       end
@@ -733,6 +726,11 @@ defmodule Zekkyou.Console do
         [%{kind: :assistant, text: clean(data["message"])}]
 
   defp history_entry(%{"event" => "model_completed"}, false), do: nil
+
+  defp history_entry(%{"event" => event, "data" => data}, empty?)
+       when event in ["tool_completed", "tool_failed"] do
+    if empty?, do: Alto.ToolDisplay.entry(event, data)
+  end
 
   defp history_entry(%{"event" => event, "data" => data}, _) do
     %{kind: :activity, text: Alto.Display.label(event) <> ": " <> Alto.Display.result(data)}

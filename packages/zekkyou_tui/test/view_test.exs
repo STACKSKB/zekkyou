@@ -19,6 +19,51 @@ defmodule Zekkyou.TUI.ViewTest do
     scroll: 0
   }
 
+  test "tool rows show targets and multiline applied diffs and git stats" do
+    entries =
+      Alto.ToolDisplay.transcript([
+        %{
+          "role" => "assistant",
+          "tool_calls" => [
+            %{
+              "id" => "edit",
+              "function" => %{"name" => "edit_file", "arguments" => ~s({"path":"lib/a.ex"})}
+            }
+          ]
+        },
+        %{
+          "role" => "tool",
+          "tool_call_id" => "edit",
+          "content" =>
+            JSON.encode!(%{
+              patch: %{content: "--- a/lib/a.ex\n+++ b/lib/a.ex\n-old\n+new", truncated: false}
+            })
+        }
+      ]) ++
+        [
+          Alto.ToolDisplay.entry(:tool_completed, %{
+            name: "git_inspect",
+            summary: "git show HEAD",
+            value: %{output: "lib/a.ex | 2 +-\n1 file changed"}
+          })
+        ]
+
+    terminal = ExRatatui.init_test_terminal(150, 42)
+
+    ExRatatui.draw(
+      terminal,
+      View.widgets(%{@state | entries: entries}, %Rect{width: 150, height: 42})
+    )
+
+    text = ExRatatui.get_buffer_content(terminal)
+    assert text =~ "edit_file lib/a.ex"
+    assert text =~ "--- a/lib/a.ex"
+    assert text =~ "+new"
+    assert text =~ "git show HEAD"
+    assert text =~ "1 file changed"
+    refute text =~ "\\n"
+  end
+
   test "structured returned errors and details render without raw maps" do
     state = %{
       @state
