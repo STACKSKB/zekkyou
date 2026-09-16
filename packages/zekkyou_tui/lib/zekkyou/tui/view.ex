@@ -44,7 +44,7 @@ defmodule Zekkyou.TUI.View do
 
         [
           {panel(if(Map.get(state, :focus) == :tasks, do: "Tasks •", else: "Tasks")), rect},
-          {%Paragraph{text: "+ New workspace · F7"}, %{inner | y: rect.y + 1, height: 1}},
+          {%Paragraph{text: "+ New task · ^G N"}, %{inner | y: rect.y + 1, height: 1}},
           {list, inner}
         ]
       else
@@ -256,10 +256,14 @@ defmodule Zekkyou.TUI.View do
     |> Enum.join("\n")
   end
 
+  defp status_text(%{leader?: true}),
+    do:
+      " Gear: N new task · W folder · T tasks · A approve · D deny · K cancel · R reconnect · Q quit · Esc cancel"
+
   defp status_text(state) do
     connection = state |> Map.get(:connection, "offline") |> to_string_or_empty()
 
-    " #{connection} | F7 New workspace ^Q quit ^R reconnect ^N new task Tab focus ^K cancel ^A approve ^D deny Enter send"
+    " #{connection} | ^G gear · N new task · W folder ^Q quit ^R reconnect ^N new task Tab focus ^K cancel ^A approve ^D deny Enter send"
   end
 
   defp to_string_or_empty(value) when is_binary(value), do: value

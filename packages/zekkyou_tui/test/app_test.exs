@@ -25,6 +25,8 @@ defmodule Zekkyou.TUI.AppTest do
           notice: "Workspace opened: " <> path
         })
 
+    def perform(model, :new, _), do: Map.put(model, :selected_id, nil)
+
     def perform(model, {:submit, _}, _), do: Map.put(model, :notice, "Sent")
     def perform(model, _, _), do: model
     def close(_), do: :ok
@@ -128,10 +130,25 @@ defmodule Zekkyou.TUI.AppTest do
     end
   end
 
-  test "F7 edits a folder separately from the draft and opens a new workspace" do
+  test "Ctrl+G N creates a task in the existing folder without a workspace form" do
+    {:ok, state} = App.mount(console_module: Console, test_mode: {140, 40})
+    state = %{state | draft: "draft", model: Map.put(state.model, :workspace_root, "/current")}
+    {:noreply, state} = App.handle_event(%Key{code: "g", modifiers: ["ctrl"]}, state)
+    {:noreply, state} = App.handle_event(%Key{code: "n"}, state)
+    ref = state.pending.ref
+    assert_receive {^ref, {model, :new}}
+    {:noreply, state} = App.handle_info({ref, {model, :new}}, state)
+    assert state.model.selected_id == nil
+    assert state.model.workspace_root == "/current"
+    assert state.workspace_form == nil
+    assert state.draft == "draft"
+  end
+
+  test "Ctrl+G W edits a folder separately from the draft and opens a new workspace" do
     {:ok, state} = App.mount(console_module: Console, test_mode: {140, 40})
     state = %{state | draft: "keep my draft"}
-    {:noreply, state} = App.handle_event(%Key{code: "f7"}, state)
+    {:noreply, state} = App.handle_event(%Key{code: "g", modifiers: ["ctrl"]}, state)
+    {:noreply, state} = App.handle_event(%Key{code: "w"}, state)
     assert state.workspace_form.host == "the service host"
     {:noreply, state} = App.handle_event(%Paste{content: "/another/project"}, state)
     assert state.draft == "keep my draft"
@@ -148,7 +165,8 @@ defmodule Zekkyou.TUI.AppTest do
 
   test "workspace validation keeps the dialog open and Escape preserves the selected task" do
     {:ok, state} = App.mount(console_module: Console, test_mode: {140, 40})
-    {:noreply, state} = App.handle_event(%Key{code: "f7"}, state)
+    {:noreply, state} = App.handle_event(%Key{code: "g", modifiers: ["ctrl"]}, state)
+    {:noreply, state} = App.handle_event(%Key{code: "w"}, state)
     {:noreply, state} = App.handle_event(%Paste{content: "/bad"}, state)
     {:noreply, state} = App.handle_event(%Key{code: "enter"}, state)
     ref = state.pending.ref

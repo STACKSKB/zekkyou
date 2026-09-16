@@ -19,6 +19,7 @@ defmodule Zekkyou.TUI.App do
        console: console,
        draft: "",
        workspace_form: nil,
+       leader?: false,
        focus: :composer,
        scroll: 0,
        pending: nil,
@@ -44,7 +45,8 @@ defmodule Zekkyou.TUI.App do
         draft: state.draft,
         focus: state.focus,
         scroll: state.scroll,
-        workspace_form: state.workspace_form
+        workspace_form: state.workspace_form,
+        leader?: state.leader?
       })
 
     Selection.widgets(
@@ -63,7 +65,8 @@ defmodule Zekkyou.TUI.App do
         draft: state.draft,
         focus: state.focus,
         scroll: state.scroll,
-        workspace_form: state.workspace_form
+        workspace_form: state.workspace_form,
+        leader?: state.leader?
       })
 
     widgets = fn -> View.widgets(view, %Rect{width: width, height: height}) end
@@ -90,7 +93,8 @@ defmodule Zekkyou.TUI.App do
                 WorkspaceForm.click(
                   state.workspace_form,
                   mouse.y - rect.y - 1,
-                  mouse.x - rect.x - 1
+                  mouse.x - rect.x - 1,
+                  rect.height
                 )
               ),
             else: {:noreply, state}
@@ -99,7 +103,7 @@ defmodule Zekkyou.TUI.App do
 
           if layout.rail && mouse.y == layout.rail.y + 1 &&
                Alto.TUI.Layout.contains?(layout.rail, mouse.x, mouse.y),
-             do: open_workspace_form(state),
+             do: dispatch(%{state | focus: :composer}, :new),
              else: {:noreply, state}
         end
 
@@ -143,7 +147,24 @@ defmodule Zekkyou.TUI.App do
   defp route_event(%Key{} = event, %{workspace_form: form} = state) when not is_nil(form),
     do: workspace_result(state, WorkspaceForm.key(form, event))
 
-  defp route_event(%Key{code: "f7"}, state), do: open_workspace_form(state)
+  defp route_event(%Key{code: "g", modifiers: ["ctrl"]}, state),
+    do: {:noreply, %{state | leader?: not state.leader?}}
+
+  defp route_event(%Key{code: code}, %{leader?: true} = state) do
+    state = %{state | leader?: false}
+
+    case String.downcase(code || "") do
+      "w" -> open_workspace_form(state)
+      "n" -> dispatch(%{state | focus: :composer}, :new)
+      "t" -> {:noreply, %{state | focus: :tasks}}
+      "a" -> dispatch(state, :approve)
+      "d" -> dispatch(state, :deny)
+      "k" -> dispatch(state, :cancel)
+      "r" -> dispatch(state, :connect)
+      "q" -> {:stop, state}
+      _ -> {:noreply, state}
+    end
+  end
 
   defp route_event(%Paste{content: text}, %{workspace_form: form} = state) when not is_nil(form),
     do: {:noreply, %{state | workspace_form: WorkspaceForm.paste(form, text)}}
@@ -306,7 +327,8 @@ defmodule Zekkyou.TUI.App do
            WorkspaceForm.new(
              base,
              "the service host",
-             Enum.map(Map.get(state.model, :projects, []), & &1["root"])
+             Enum.map(Map.get(state.model, :projects, []), & &1["root"]),
+             complete: nil
            )
      }}
   end
