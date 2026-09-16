@@ -297,7 +297,7 @@ defmodule Zekkyou.Console do
           {:console, reason} ->
             %{
               failed(model, :poll, reason)
-              | notice: "Sent; reconnect to recover progress: #{inspect(reason)}"
+              | notice: "Sent; reconnect to recover progress: #{Alto.Display.error(reason)}"
             }
         end
     end
@@ -655,7 +655,11 @@ defmodule Zekkyou.Console do
           [
             %{
               kind: message["role"] || "message",
-              text: clean(message["content"] || message["tool_calls"])
+              text:
+                if(message["role"] == "tool" or not is_binary(message["content"]),
+                  do: Alto.Display.result(message["content"] || message["tool_calls"]),
+                  else: clean(message["content"])
+                )
             }
           ]
       end)
@@ -731,7 +735,7 @@ defmodule Zekkyou.Console do
   defp history_entry(%{"event" => "model_completed"}, false), do: nil
 
   defp history_entry(%{"event" => event, "data" => data}, _) do
-    %{kind: :activity, text: clean(event) <> ": " <> clean(data)}
+    %{kind: :activity, text: Alto.Display.label(event) <> ": " <> Alto.Display.result(data)}
   end
 
   defp selected(model), do: Enum.find(model.tasks, &(&1.id == model.selected_id))
@@ -768,28 +772,32 @@ defmodule Zekkyou.Console do
   end
 
   defp failed(model, {:workspace, _path}, {:server, _, _} = reason) do
-    detail = inspect(reason)
+    detail = Alto.Display.error(reason)
 
     notice =
       cond do
-        String.contains?(detail, "project_not_directory") ->
+        String.contains?(detail, "Folder does not exist or is not a directory") ->
           "Folder does not exist or is not a directory on the service host."
 
-        String.contains?(detail, "invalid_workspace_path") ->
+        String.contains?(detail, "Enter a folder path on one line") ->
           "Enter a folder path on one line."
 
         true ->
-          "Could not open workspace: #{clean(reason)}"
+          "Could not open workspace: #{Alto.Display.error(reason)}"
       end
 
     %{model | notice: notice}
   end
 
   defp failed(model, :efforts, {:server, _, _} = reason),
-    do: %{model | effort_catalog: nil, notice: "Could not load effort choices: #{clean(reason)}"}
+    do: %{
+      model
+      | effort_catalog: nil,
+        notice: "Could not load effort choices: #{Alto.Display.error(reason)}"
+    }
 
   defp failed(model, action, {:server, _, _} = reason) when action != :connect,
-    do: %{model | notice: "Request rejected: #{clean(reason)}"}
+    do: %{model | notice: "Request rejected: #{Alto.Display.error(reason)}"}
 
   defp failed(model, action, reason) do
     close(model)
@@ -804,7 +812,7 @@ defmodule Zekkyou.Console do
       | client: nil,
         tunnel: nil,
         connection: "disconnected",
-        notice: clean(reason) <> suffix
+        notice: Alto.Display.error(reason) <> suffix
     }
   end
 
@@ -817,7 +825,7 @@ defmodule Zekkyou.Console do
       cond do
         is_binary(value) -> value
         is_nil(value) -> ""
-        true -> inspect(value, limit: 30, printable_limit: 8_000)
+        true -> Alto.Display.result(value)
       end
 
     text = clean_input(text)

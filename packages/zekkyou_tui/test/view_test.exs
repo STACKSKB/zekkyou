@@ -19,6 +19,36 @@ defmodule Zekkyou.TUI.ViewTest do
     scroll: 0
   }
 
+  test "structured returned errors and details render without raw maps" do
+    state = %{
+      @state
+      | entries: [
+          %{kind: :error, text: %{message: "Request failed", reason: :eacces}},
+          %{kind: :tool, text: ~s({"exit_code":1,"stderr":"Missing file"})}
+        ],
+        detail: %{request_id: "req-1", status: :failed}
+    }
+
+    terminal = ExRatatui.init_test_terminal(150, 42)
+    ExRatatui.draw(terminal, View.widgets(state, %Rect{width: 150, height: 42}))
+    buffer = ExRatatui.get_buffer_content(terminal)
+    assert buffer =~ "Request failed"
+    assert buffer =~ "Permission denied"
+    assert buffer =~ "Exit code: 1"
+    assert buffer =~ "Request id: req-1"
+    refute buffer =~ "%{"
+    refute buffer =~ "=>"
+    literal = ~s(%{example: :source_code})
+
+    state = %{
+      @state
+      | entries: [%{kind: :user, text: literal}, %{kind: :assistant, text: literal}]
+    }
+
+    ExRatatui.draw(terminal, View.widgets(state, %Rect{width: 150, height: 42}))
+    assert ExRatatui.get_buffer_content(terminal) =~ literal
+  end
+
   test "renders bounded panes and selects the matching task" do
     viewport = %Rect{x: 3, y: 2, width: 120, height: 36}
     rendered = View.widgets(@state, viewport)

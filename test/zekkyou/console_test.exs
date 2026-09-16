@@ -2,6 +2,26 @@ defmodule Zekkyou.ConsoleTest do
   use ExUnit.Case, async: false
   alias Zekkyou.{Client, Config, Console, Service, Tasks}
 
+  test "console display presents returned maps and protocol tuples as readable fields" do
+    value = %{
+      "$tuple" => [
+        "http_error",
+        429,
+        %{"error" => %{"message" => "Rate limit exceeded", "retry_after" => 30}}
+      ]
+    }
+
+    text = Console.clean(value)
+    assert text =~ "Provider returned HTTP 429"
+    assert text =~ "Rate limit exceeded"
+    assert text =~ "Retry after: 30"
+    refute text =~ "%{"
+    refute text =~ "$tuple"
+    refute text =~ "=>"
+    assert Console.clean(%{exit_code: 1, stderr: "No such file"}) =~ "Stderr: No such file"
+    assert Console.clean("example: %{key: :value}") == "example: %{key: :value}"
+  end
+
   defmodule Provider do
     @behaviour Alto.Provider
     def describe(_), do: %{}

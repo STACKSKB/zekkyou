@@ -20,7 +20,7 @@ defmodule Zekkyou.TUI.CLI do
         :ok
 
       {:error, reason} ->
-        IO.puts(:stderr, "Zekkyou TUI: #{inspect(reason)}")
+        IO.puts(:stderr, "Zekkyou TUI: #{Alto.Display.error(reason)}")
         System.halt(1)
     end
   end

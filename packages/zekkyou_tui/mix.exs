@@ -13,7 +13,7 @@ defmodule ZekkyouTUI.MixProject do
   def application, do: [extra_applications: [:logger]]
 
   defp deps do
-    ref = "d2220abf489fb50283a02456a881eed86fbcaf53"
+    ref = "901529e46cd94de498e8400881032631d823e323"
     repository = "https://github.com/STACKSKB/alto.git"
 
     {alto, alto_tui} =

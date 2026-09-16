@@ -10,7 +10,7 @@ Development is in progress; this is not yet the unattended-operation release.
 ## Development
 
 The dependency and lockfiles pin Alto commit
-`d2220abf489fb50283a02456a881eed86fbcaf53`, which includes exact parent-batch
+`901529e46cd94de498e8400881032631d823e323`, which includes exact parent-batch
 continuations, independent child approvals and explicit resource retirement
 for the Serial/Stepped runners, plus shared TUI screen selection, clipboard support,
 and the folder workspace dialog.
@@ -162,6 +162,11 @@ workspace. Closing hides it without deleting files or task history, and running
 work continues. Closed workspaces stay closed across reconnects; opening the same
 folder restores its saved tasks. Closing the last workspace leaves the folder
 picker available. Restart the service after upgrading to enable workspace closing.
+
+Application errors and returned tool data appear as readable messages and labeled
+fields, including provider explanations, HTTP status codes, exit codes, and paths.
+The same formatting applies to reconnect notices and saved tool history. Ordinary
+user and assistant messages retain their code and prose.
 
 The conversation border shows animated activity and elapsed time while connecting,
 sending, waiting for a model or service, thinking, and running tools. Provider

@@ -1,7 +1,7 @@
 # Development checkpoint — 2026-09-10
 
 Current Alto source: published commit
-`d2220abf489fb50283a02456a881eed86fbcaf53`, pinned in both the service and
+`901529e46cd94de498e8400881032631d823e323`, pinned in both the service and
 terminal dependency declarations and lockfiles. Fresh builds use the Git
 dependency directly. The sections below retain earlier development checkpoints;
 the latest validation is recorded at the end.
@@ -914,3 +914,27 @@ published dependency without ALTO_PATH. Tests cover initial unselected state,
 arrow selection, typed versus selected Enter targets, button consistency,
 selection reset after edits/completion, and asynchronous choice removal.
 Formatting and whitespace checks passed. Restart the TUIs to load the fix.
+
+## Readable errors and returned data — 2026-09-16
+
+Published Alto `901529e46cd94de498e8400881032631d823e323` and updated both
+service and TUI pins and lockfiles. Application errors and returned structured
+data now use readable messages and labeled fields across both TUIs, including
+provider failures, startup errors, notices, context details, and saved Codex and
+remote tool history. Useful provider explanations, HTTP status codes, paths,
+and exit codes remain visible. User and assistant code and prose remain literal.
+
+The shared formatter bounds output, redacts credential fields, and strips terminal
+control characters. Legacy serialized diagnostic literals use a restricted
+literal parser without evaluating code or creating untrusted atoms. Audited TUI
+display paths no longer fall back to raw Elixir inspection.
+
+Validation:
+
+- Alto formatter, TUI, and Codex suites: 110 tests passed.
+- Zekkyou service suite: 113 tests passed against the published dependency.
+- Zekkyou TUI suite: 35 tests passed against the published dependency.
+- Formatting and whitespace checks passed. Dependency lockfiles only change
+  the Alto and Alto TUI revisions.
+
+Restart the TUIs to load the updated presentation.

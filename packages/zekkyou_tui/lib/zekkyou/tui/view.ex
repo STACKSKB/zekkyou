@@ -422,7 +422,15 @@ defmodule Zekkyou.TUI.View do
     entries
     |> Enum.map(fn entry ->
       kind = entry |> Map.get(:kind, :message) |> to_string_or_empty() |> String.upcase()
-      text = entry |> Map.get(:text, "") |> to_string_or_empty()
+      value = Map.get(entry, :text, "")
+
+      text =
+        case kind do
+          "ERROR" -> Alto.Display.error(value)
+          role when role in ["TOOL", "ACTIVITY"] -> Alto.Display.result(value)
+          _ -> to_string_or_empty(value)
+        end
+
       "#{if kind == "REASONING", do: "THINKING", else: kind}: #{text}"
     end)
     |> Enum.join("\n")
@@ -440,7 +448,7 @@ defmodule Zekkyou.TUI.View do
 
   defp to_string_or_empty(value) when is_binary(value), do: value
   defp to_string_or_empty(nil), do: ""
-  defp to_string_or_empty(value), do: to_string(value)
+  defp to_string_or_empty(value), do: Alto.Display.text(value)
 
   defp translate(geometry, dx, dy) do
     Map.new(geometry, fn

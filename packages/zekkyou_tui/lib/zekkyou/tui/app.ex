@@ -493,7 +493,7 @@ defmodule Zekkyou.TUI.App do
 
   def handle_info({:DOWN, ref, :process, _pid, reason}, %{pending: %Task{ref: ref}} = state) do
     notice =
-      "Client operation failed: #{Zekkyou.Console.clean(reason)}; reconnect and inspect before resending"
+      "Client operation failed: #{Alto.Display.error(reason)}; reconnect and inspect before resending"
 
     {:noreply,
      %{state | pending: nil, pending_action: nil, model: Map.put(state.model, :notice, notice)}}
