@@ -2,7 +2,7 @@ defmodule Zekkyou.TUI.App do
   @moduledoc "Terminal client for the independently owned Zekkyou service."
   use ExRatatui.App
 
-  alias ExRatatui.Event.{Key, Paste, Resize}
+  alias ExRatatui.Event.{Key, Mouse, Paste, Resize}
   alias Alto.TUI.{Clipboard, Selection, WorkspaceForm}
   alias ExRatatui.Layout.Rect
   alias Zekkyou.TUI.View
@@ -22,6 +22,7 @@ defmodule Zekkyou.TUI.App do
        leader?: false,
        focus: :composer,
        scroll: 0,
+       details_scroll: 0,
        pending: nil,
        submitted_draft: nil,
        dimensions: Keyword.get(opts, :test_mode) || terminal_dimensions(),
@@ -45,6 +46,7 @@ defmodule Zekkyou.TUI.App do
         draft: state.draft,
         focus: state.focus,
         scroll: state.scroll,
+        details_scroll: state.details_scroll,
         workspace_form: state.workspace_form,
         leader?: state.leader?
       })
@@ -65,6 +67,7 @@ defmodule Zekkyou.TUI.App do
         draft: state.draft,
         focus: state.focus,
         scroll: state.scroll,
+        details_scroll: state.details_scroll,
         workspace_form: state.workspace_form,
         leader?: state.leader?
       })
@@ -101,10 +104,17 @@ defmodule Zekkyou.TUI.App do
         else
           layout = Alto.TUI.Layout.calculate(width, height)
 
-          if layout.rail && mouse.y == layout.rail.y + 1 &&
-               Alto.TUI.Layout.contains?(layout.rail, mouse.x, mouse.y),
-             do: dispatch(%{state | focus: :composer}, :new),
-             else: {:noreply, state}
+          cond do
+            layout.rail && mouse.y == layout.rail.y + 1 &&
+                Alto.TUI.Layout.contains?(layout.rail, mouse.x, mouse.y) ->
+              dispatch(%{state | focus: :composer}, :new)
+
+            Alto.TUI.Layout.contains?(layout.details, mouse.x, mouse.y) ->
+              {:noreply, %{state | focus: :details}}
+
+            true ->
+              {:noreply, state}
+          end
         end
 
       {:copy, text, selection} ->
@@ -174,6 +184,24 @@ defmodule Zekkyou.TUI.App do
   defp route_event(%Paste{content: text}, state),
     do: {:noreply, append_draft(%{state | focus: :composer, selection: Selection.new()}, text)}
 
+  defp route_event(%Mouse{kind: kind, x: x, y: y}, %{workspace_form: nil} = state)
+       when kind in ["scroll_up", "scroll_down"] do
+    {width, height} = state.dimensions
+    layout = Alto.TUI.Layout.calculate(width, height)
+    delta = if kind == "scroll_up", do: -3, else: 3
+
+    cond do
+      Alto.TUI.Layout.contains?(layout.details, x, y) ->
+        {:noreply, scroll(state, :details, delta)}
+
+      Alto.TUI.Layout.contains?(layout.transcript, x, y) ->
+        {:noreply, scroll(state, :transcript, delta)}
+
+      true ->
+        {:noreply, state}
+    end
+  end
+
   defp route_event(_event, state), do: {:noreply, state}
 
   defp key(%Key{code: code, modifiers: mods}, state) do
@@ -195,7 +223,7 @@ defmodule Zekkyou.TUI.App do
 
       code in ["page_up", "page_down"] ->
         offset = if code == "page_up", do: -10, else: 10
-        {:noreply, %{state | scroll: max(0, state.scroll + offset)}}
+        {:noreply, scroll(state, state.focus, offset)}
 
       code in ["up", "down"] and state.focus == :tasks ->
         select_task(state, code)
@@ -287,6 +315,13 @@ defmodule Zekkyou.TUI.App do
          pending: nil,
          submitted_draft: nil,
          scroll: scroll,
+         details_scroll:
+           if(
+             approval_changed? or action == :new or match?({:select, _}, action) or
+               match?({:workspace, _}, action),
+             do: 0,
+             else: state.details_scroll
+           ),
          selection: if(approval_changed?, do: Selection.new(), else: state.selection),
          workspace_form: form,
          focus:
@@ -377,6 +412,22 @@ defmodule Zekkyou.TUI.App do
     end
   end
 
+  defp scroll(state, :details, delta) do
+    {w, h} = state.dimensions
+
+    %{
+      state
+      | details_scroll:
+          min(max(state.details_scroll + delta, 0), View.details_bottom(state.model, w, h))
+    }
+  end
+
+  defp scroll(state, _, delta) do
+    {w, h} = state.dimensions
+    %{state | scroll: min(max(state.scroll + delta, 0), View.scroll_bottom(state.model, w, h))}
+  end
+
+  defp next_focus(:details), do: :composer
   defp next_focus(:composer), do: :tasks
   defp next_focus(:tasks), do: :composer
 

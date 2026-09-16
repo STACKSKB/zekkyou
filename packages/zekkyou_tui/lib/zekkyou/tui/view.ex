@@ -54,7 +54,11 @@ defmodule Zekkyou.TUI.View do
     transcript = %Paragraph{
       text: conversation_text(state, geometry),
       wrap: true,
-      scroll: {max(Map.get(state, :scroll, 0), 0), 0},
+      scroll:
+        {min(
+           max(Map.get(state, :scroll, 0), 0),
+           scroll_bottom(state, viewport.width, viewport.height)
+         ), 0},
       block: panel("Conversation • " <> selected_title(state))
     }
 
@@ -92,6 +96,11 @@ defmodule Zekkyou.TUI.View do
           {%Paragraph{
              text: if(detail == "", do: "No task selected.", else: detail),
              wrap: true,
+             scroll:
+               {min(
+                  max(Map.get(state, :details_scroll, 0), 0),
+                  details_bottom(state, viewport.width, viewport.height)
+                ), 0},
              block: panel(if(approval(state), do: "Approval required", else: "Details"))
            }, geometry.details}
         ]
@@ -121,6 +130,33 @@ defmodule Zekkyou.TUI.View do
     case Map.get(state, :workspace_form) do
       nil -> widgets
       form -> widgets ++ WorkspaceForm.widgets(form, viewport)
+    end
+  end
+
+  def scroll_bottom(state, width, height) do
+    geometry = Layout.calculate(width, height)
+    rect = geometry.transcript
+
+    Alto.TUI.Scroll.bottom(
+      conversation_text(state, geometry),
+      rect.width - 2,
+      rect.height - 2,
+      :zekkyou_transcript
+    )
+  end
+
+  def details_bottom(state, width, height) do
+    case Layout.calculate(width, height).details do
+      nil ->
+        0
+
+      rect ->
+        Alto.TUI.Scroll.bottom(
+          detail_text(state),
+          rect.width - 2,
+          rect.height - 2,
+          :zekkyou_details
+        )
     end
   end
 

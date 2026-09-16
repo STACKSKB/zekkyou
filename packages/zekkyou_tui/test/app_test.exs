@@ -130,6 +130,30 @@ defmodule Zekkyou.TUI.AppTest do
     end
   end
 
+  test "context scrolling clamps at the last wrapped text row" do
+    {:ok, state} = App.mount(console_module: Console, test_mode: {140, 40})
+
+    state = %{
+      state
+      | model: Map.put(state.model, :detail, String.duplicate("details\n", 100) <> "END"),
+        focus: :details,
+        details_scroll: 50_000
+    }
+
+    cap = Zekkyou.TUI.View.details_bottom(state.model, 140, 40)
+    {:noreply, state} = App.handle_event(%Key{code: "page_down"}, state)
+    assert state.details_scroll == cap
+    rect = Alto.TUI.Layout.calculate(140, 40).details
+
+    {:noreply, state} =
+      App.handle_event(%Mouse{kind: "scroll_down", x: rect.x + 2, y: rect.y + 2}, state)
+
+    assert state.details_scroll == cap
+    terminal = ExRatatui.init_test_terminal(140, 40)
+    ExRatatui.draw(terminal, App.render(state, %{width: 140, height: 40}))
+    assert ExRatatui.get_buffer_content(terminal) =~ "END"
+  end
+
   test "folder completion ignores stale responses and Tab accepts a current service suggestion" do
     {:ok, state} = App.mount(console_module: Console, test_mode: {140, 40})
     {:noreply, state} = App.handle_event(%Key{code: "g", modifiers: ["ctrl"]}, state)
