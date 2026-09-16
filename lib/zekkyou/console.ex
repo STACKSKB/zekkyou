@@ -43,6 +43,19 @@ defmodule Zekkyou.Console do
     :exit, reason -> failed(model, action, reason)
   end
 
+  @doc "Complete paths on the service host; safe to call from a background task."
+  def complete_folders(%{client: nil}, _path), do: {:error, :disconnected}
+
+  def complete_folders(model, path) do
+    reply =
+      request(model.client, %{type: "command", name: "projects.complete", payload: %{path: path}})
+
+    {:ok, reply["folders"] || []}
+  catch
+    {:console, reason} -> {:error, reason}
+    :exit, reason -> {:error, reason}
+  end
+
   def close(model) do
     if model.client, do: Client.close(model.client)
     if model.tunnel, do: SSH.close(model.tunnel)
@@ -560,7 +573,7 @@ defmodule Zekkyou.Console do
     %{
       model
       | entries: entries,
-        detail: "Workspace folder\n" <> clean(folder) <> "\nF7 New workspace\n\n" <> detail
+        detail: "Workspace folder\n" <> clean(folder) <> "\n^G W Change folder\n\n" <> detail
     }
   end
 

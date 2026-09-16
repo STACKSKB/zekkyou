@@ -130,6 +130,27 @@ defmodule Zekkyou.TUI.AppTest do
     end
   end
 
+  test "folder completion ignores stale responses and Tab accepts a current service suggestion" do
+    {:ok, state} = App.mount(console_module: Console, test_mode: {140, 40})
+    {:noreply, state} = App.handle_event(%Key{code: "g", modifiers: ["ctrl"]}, state)
+    {:noreply, state} = App.handle_event(%Key{code: "w"}, state)
+    old = state.workspace_form.revision
+    {:noreply, state} = App.handle_event(%Paste{content: "/remote/p"}, state)
+    {:noreply, state} = App.handle_info({:workspace_suggestions, old, {:ok, ["/wrong/"]}}, state)
+    refute "/wrong/" in state.workspace_form.suggestions
+    revision = state.workspace_form.revision
+
+    {:noreply, state} =
+      App.handle_info({:workspace_suggestions, revision, {:ok, ["/remote/project/"]}}, state)
+
+    {:noreply, state} = App.handle_event(%Key{code: "tab"}, state)
+    assert Alto.TUI.WorkspaceForm.path(state.workspace_form) == "/remote/project/"
+    {:noreply, state} = App.handle_event(%Key{code: "esc"}, state)
+
+    assert {:noreply, ^state} =
+             App.handle_info({:workspace_suggestions, revision, {:ok, ["/old/"]}}, state)
+  end
+
   test "Ctrl+G N creates a task in the existing folder without a workspace form" do
     {:ok, state} = App.mount(console_module: Console, test_mode: {140, 40})
     state = %{state | draft: "draft", model: Map.put(state.model, :workspace_root, "/current")}

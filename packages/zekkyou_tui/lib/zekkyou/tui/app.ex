@@ -167,7 +167,7 @@ defmodule Zekkyou.TUI.App do
   end
 
   defp route_event(%Paste{content: text}, %{workspace_form: form} = state) when not is_nil(form),
-    do: {:noreply, %{state | workspace_form: WorkspaceForm.paste(form, text)}}
+    do: workspace_result(state, {:edit, WorkspaceForm.paste(form, text)})
 
   defp route_event(%Key{} = event, state), do: key(event, state)
 
@@ -216,6 +216,31 @@ defmodule Zekkyou.TUI.App do
   end
 
   @impl true
+  def handle_info(
+        {:complete_workspace, revision},
+        %{workspace_form: %{revision: revision} = form} = state
+      ) do
+    owner = self()
+    path = WorkspaceForm.path(form)
+
+    Task.start(fn ->
+      result = state.console.complete_folders(state.model, path)
+      send(owner, {:workspace_suggestions, revision, result})
+    end)
+
+    {:noreply, state}
+  end
+
+  def handle_info({:complete_workspace, _revision}, state), do: {:noreply, state}
+
+  def handle_info(
+        {:workspace_suggestions, revision, result},
+        %{workspace_form: %{revision: revision} = form} = state
+      ),
+      do: {:noreply, %{state | workspace_form: WorkspaceForm.suggest(form, result)}}
+
+  def handle_info({:workspace_suggestions, _revision, _result}, state), do: {:noreply, state}
+
   def handle_info({:tui_deferred_input, event}, state), do: handle_event(event, state)
 
   def handle_info({ref, {model, action}}, %{pending: %Task{ref: ref}} = state) do
@@ -320,21 +345,29 @@ defmodule Zekkyou.TUI.App do
   defp open_workspace_form(state) do
     base = Map.get(state.model, :workspace_base) || "the service's default workspace"
 
-    {:noreply,
-     %{
-       state
-       | workspace_form:
-           WorkspaceForm.new(
-             base,
-             "the service host",
-             Enum.map(Map.get(state.model, :projects, []), & &1["root"]),
-             complete: nil
-           )
-     }}
+    form =
+      WorkspaceForm.new(
+        base,
+        "the service host",
+        Enum.map(Map.get(state.model, :projects, []), & &1["root"]),
+        complete: nil
+      )
+
+    workspace_result(state, {:edit, form})
   end
 
   defp workspace_result(state, :cancel), do: {:noreply, %{state | workspace_form: nil}}
-  defp workspace_result(state, {:edit, form}), do: {:noreply, %{state | workspace_form: form}}
+
+  defp workspace_result(state, {:edit, form}) do
+    if Code.ensure_loaded?(state.console) and
+         function_exported?(state.console, :complete_folders, 2) and
+         (state.workspace_form == nil or state.workspace_form.revision != form.revision) do
+      Process.send_after(self(), {:complete_workspace, form.revision}, 40)
+    end
+
+    {:noreply, %{state | workspace_form: form}}
+  end
+
   defp workspace_result(state, {:submit, path}), do: dispatch(state, {:workspace, path})
 
   defp terminal_dimensions do

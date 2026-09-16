@@ -96,6 +96,16 @@ defmodule Zekkyou.ProjectsTest do
     Console.close(model)
   end
 
+  test "console completes directories on the service host without registering them", ctx do
+    model = Console.perform(Console.new(socket: Config.socket_path(ctx.config)), :connect, self())
+    assert {:ok, folders} = Console.complete_folders(model, "sec")
+    assert folders == [ctx.folder <> "/"]
+    assert {:error, _} = Console.complete_folders(model, "bad\npath")
+    assert model.selected_id == nil
+    assert model.workspace_root == ctx.root
+    Console.close(model)
+  end
+
   test "workspace registrations and queued folder choices survive restart", ctx do
     {:ok, %{project: project}} = Projects.open(ctx.config, ctx.folder)
     {:ok, %{project: same}} = Projects.open(ctx.config, ctx.folder)

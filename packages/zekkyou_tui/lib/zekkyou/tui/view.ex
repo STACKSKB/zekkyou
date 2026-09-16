@@ -226,7 +226,7 @@ defmodule Zekkyou.TUI.View do
 
     case detail do
       "Workspace folder\n" <> rest ->
-        case String.split(rest, "\nF7 New workspace\n\n", parts: 2) do
+        case Regex.split(~r/\n(?:F7 New workspace|\^G W Change folder)\n\n/, rest, parts: 2) do
           [folder, data] -> folder <> "\n\n" <> data
           _ -> detail
         end

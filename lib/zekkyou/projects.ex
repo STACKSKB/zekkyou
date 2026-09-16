@@ -9,6 +9,14 @@ defmodule Zekkyou.Projects do
              {:ok, projects} <- Catalog.projects(opts(config)),
              do: {:ok, %{projects: projects, default: default}}
       end,
+      "projects.complete" => fn
+        %{"path" => path} ->
+          with {:ok, folders} <- Alto.Harness.Folders.complete(path, config.workspace),
+               do: {:ok, %{folders: folders}}
+
+        _ ->
+          {:error, :invalid_workspace_path}
+      end,
       "projects.open" => fn
         %{"path" => path} -> open(config, path)
         _ -> {:error, :invalid_workspace_path}
