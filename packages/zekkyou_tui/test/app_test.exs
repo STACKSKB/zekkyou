@@ -25,6 +25,13 @@ defmodule Zekkyou.TUI.AppTest do
           notice: "Workspace opened: " <> path
         })
 
+    def perform(model, {:select_workspace, id}, _) do
+      project = Enum.find(model.projects, &(&1["id"] == id))
+      Map.merge(model, %{workspace_id: id, workspace_root: project["root"], selected_id: nil})
+    end
+
+    def perform(model, {:select, id}, _), do: Map.put(model, :selected_id, id)
+
     def perform(model, :new, _), do: Map.put(model, :selected_id, nil)
 
     def perform(model, {:submit, _}, _), do: Map.put(model, :notice, "Sent")
@@ -291,6 +298,97 @@ defmodule Zekkyou.TUI.AppTest do
     assert state.model.workspace_root == "/current"
     assert state.workspace_form == nil
     assert state.draft == "draft"
+  end
+
+  test "workspace sidebar navigates both ways and mouse actions open folders or compose" do
+    {:ok, state} = App.mount(console_module: Console, test_mode: {140, 40})
+
+    projects =
+      Enum.map(1..3, fn n ->
+        %{"id" => "p#{n}", "name" => "Project #{n}", "root" => "/p#{n}"}
+      end)
+
+    tasks =
+      Enum.map(1..3, fn n ->
+        %{
+          id: "t#{n}",
+          title: "Task #{n}",
+          status: "completed",
+          workspace_id: "p#{n}",
+          cwd: "/p#{n}"
+        }
+      end)
+
+    state = %{
+      state
+      | draft: "keep draft",
+        focus: :tasks,
+        model:
+          Map.merge(state.model, %{
+            projects: projects,
+            tasks: tasks,
+            selected_id: "t2",
+            workspace_id: "p2"
+          })
+    }
+
+    header = sidebar_key(state, "up")
+    assert header.model.workspace_id == "p2"
+    assert header.model.selected_id == nil
+    assert header.focus == :tasks
+    previous = sidebar_key(header, "up")
+    assert previous.model.workspace_id == "p1"
+    assert previous.model.selected_id == nil
+    task = sidebar_key(previous, "down")
+    assert task.model.selected_id == "t1"
+    next = sidebar_key(task, "down")
+    assert next.model.workspace_id == "p2"
+    assert next.model.selected_id == nil
+
+    rail = Alto.TUI.Layout.calculate(140, 40).rail
+
+    for {row, id} <- [{1, "p2"}, {3, "p3"}] do
+      clicked = sidebar_click(state, rail.x + 3, rail.y + 2 + row) |> finish_sidebar_action()
+      assert clicked.model.workspace_id == id
+      assert clicked.model.selected_id == nil
+      assert clicked.focus == :composer
+      assert clicked.workspace_form == nil
+      assert clicked.draft == "keep draft"
+    end
+
+    clicked = sidebar_click(state, rail.x + 3, rail.y + 4) |> finish_sidebar_action()
+    assert clicked.model.selected_id == "t2"
+    assert clicked.focus == :tasks
+
+    form = sidebar_click(state, rail.x + 3, rail.y + 1)
+    assert form.workspace_form.kind == :workspace_form
+    assert form.model.selected_id == "t2"
+    {:noreply, form} = App.handle_event(%Paste{content: "/new/workspace"}, form)
+    {:noreply, opening} = App.handle_event(%Key{code: "enter"}, form)
+    opened = finish_sidebar_action(opening)
+    assert opened.model.workspace_root == "/new/workspace"
+    assert opened.model.selected_id == nil
+    assert opened.workspace_form == nil
+    assert opened.draft == "keep draft"
+  end
+
+  defp sidebar_key(state, code) do
+    {:noreply, next} = App.handle_event(%Key{code: code}, state)
+    finish_sidebar_action(next)
+  end
+
+  defp sidebar_click(state, x, y) do
+    mouse = %Mouse{kind: "down", button: "left", x: x, y: y}
+    {:noreply, pressed} = App.handle_event(mouse, state)
+    {:noreply, clicked} = App.handle_event(%{mouse | kind: "up"}, pressed)
+    clicked
+  end
+
+  defp finish_sidebar_action(state) do
+    ref = state.pending.ref
+    assert_receive {^ref, result}, 1000
+    {:noreply, next} = App.handle_info({ref, result}, state)
+    next
   end
 
   test "Ctrl+G W edits a folder separately from the draft and opens a new workspace" do

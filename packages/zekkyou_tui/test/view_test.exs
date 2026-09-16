@@ -40,14 +40,47 @@ defmodule Zekkyou.TUI.ViewTest do
     assert task_list.selected == 1
 
     assert Enum.any?(rendered, fn
-             {%ExRatatui.Widgets.Block{title: "Tasks"}, _} -> true
+             {%ExRatatui.Widgets.Block{title: "Workspaces"}, _} -> true
              _ -> false
            end)
 
     assert Enum.any?(rendered, fn
-             {%Paragraph{text: "+ New task · ^G N"}, _} -> true
+             {%Paragraph{text: "+ New workspace · ^G W"}, _} -> true
              _ -> false
            end)
+  end
+
+  test "workspace headers group tasks and scrolled hit targets match the displayed rows" do
+    projects =
+      Enum.map(1..20, fn n ->
+        %{"id" => "p#{n}", "name" => "Project #{n}", "root" => "/p#{n}"}
+      end)
+
+    state =
+      Map.merge(@state, %{
+        projects: projects,
+        workspace_id: "p20",
+        selected_id: "two",
+        tasks: [
+          %{id: "one", title: "First task", status: "open", workspace_id: "p1"},
+          %{id: "two", title: "Second task", status: "done", cwd: "/p20"}
+        ]
+      })
+
+    rows = View.rail_rows(state)
+    assert length(rows) == 21
+    assert Enum.at(rows, -1).id == "two"
+    assert View.selected_rail_index(state, rows) == 20
+    rail = Alto.TUI.Layout.calculate(140, 16).rail
+    assert View.rail_target(state, 140, 16, rail.x + 3, rail.y + 1) == :new_workspace
+    assert View.rail_target(state, 140, 16, rail.x + 3, rail.y + rail.height - 2).id == "two"
+    assert View.rail_target(state, 140, 16, rail.x + 3, rail.y + rail.height - 3).id == "p20"
+    terminal = ExRatatui.init_test_terminal(140, 16)
+    ExRatatui.draw(terminal, View.widgets(state, %Rect{width: 140, height: 16}))
+    screen = ExRatatui.get_buffer_content(terminal)
+    assert screen =~ "New workspace"
+    assert screen =~ "Project 20"
+    assert screen =~ "Second task"
   end
 
   test "collapses optional panes on narrow terminals" do

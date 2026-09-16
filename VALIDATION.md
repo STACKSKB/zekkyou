@@ -1,7 +1,7 @@
 # Development checkpoint — 2026-09-10
 
 Current Alto source: published commit
-`d05c400a4e3b04a013cc4f8a1291b31599a9a660`, pinned in both the service and
+`a339e5a57aefcea4b634c6fc6a8a4d3eb0029f69`, pinned in both the service and
 terminal dependency declarations and lockfiles. Fresh builds use the Git
 dependency directly. The sections below retain earlier development checkpoints;
 the latest validation is recorded at the end.
@@ -824,3 +824,30 @@ Validation:
   update the Alto and Alto TUI revisions.
 
 Restart the service and terminal clients to load the fix.
+
+## Workspace sidebar navigation and mouse actions — 2026-09-16
+
+Published Alto `a339e5a57aefcea4b634c6fc6a8a4d3eb0029f69` and updated both
+service and TUI dependency pins. The sidebar action is now New workspace and
+opens the shared folder picker by mouse. Clicking a workspace name prepares a
+new task in that folder and focuses the composer while preserving its draft.
+Ctrl+G N remains the keyboard shortcut for a new task in the current folder.
+
+Alto workspace-header selection no longer automatically reselects the first
+child task, which previously trapped upward navigation. Zekkyou displays workspace
+headers and their task rows, with matching Up/Down and mouse handling. Selecting
+a saved workspace preserves sidebar order; legacy tasks without registered
+workspaces remain accessible. Scrolled mouse targets follow the rendered rows.
+
+Validation:
+
+- Alto TUI suite: 93 tests passed.
+- Zekkyou service suite: 111 tests passed against the published dependency,
+  including execution of a fresh task in a selected saved workspace.
+- Zekkyou TUI suite: 31 tests passed against the published dependencies,
+  including upward/downward navigation, workspace and task clicks, creating a
+  workspace through the sidebar, draft preservation, and scrolled hit targets.
+- Formatting and whitespace checks passed. Only Alto / Alto TUI revisions
+  changed in the lockfiles.
+
+Restart the terminal clients to load the updated sidebar.

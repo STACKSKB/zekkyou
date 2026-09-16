@@ -131,6 +131,22 @@ defmodule Zekkyou.Console do
       else: %{model | notice: "Task is no longer available"}
   end
 
+  defp do_perform(model, {:select_workspace, id}, _owner) do
+    case Enum.find(model.projects, &(&1["id"] == id)) do
+      nil ->
+        %{model | notice: "Workspace is no longer available"}
+
+      project ->
+        reset_history(%{
+          model
+          | selected_id: nil,
+            workspace_id: id,
+            workspace_root: project["root"],
+            notice: "New task in " <> project["name"]
+        })
+    end
+  end
+
   defp do_perform(%{client: nil} = model, _action, _owner),
     do: %{model | notice: "Reconnect before sending commands"}
 

@@ -96,6 +96,33 @@ defmodule Zekkyou.ProjectsTest do
     Console.close(model)
   end
 
+  test "selecting a saved workspace prepares a fresh task there without reordering folders",
+       ctx do
+    model =
+      Console.perform(
+        Console.new(socket: Config.socket_path(ctx.config), profile: "test"),
+        :connect,
+        self()
+      )
+
+    default = Enum.find(model.projects, &(&1["root"] == ctx.root))
+    model = Console.perform(model, {:workspace, "second project"}, self())
+    model = Console.perform(model, {:submit, "{}"}, self())
+    old_id = model.selected_id
+    assert completed(ctx.name, old_id)["cwd"] == ctx.folder
+    projects = model.projects
+    model = Console.perform(model, {:select_workspace, default["id"]}, self())
+    assert model.projects == projects
+    assert model.selected_id == nil
+    assert model.workspace_root == ctx.root
+    assert model.workspace_id == default["id"]
+    assert model.entries == []
+    model = Console.perform(model, {:submit, "{}"}, self())
+    assert model.selected_id != old_id
+    assert completed(ctx.name, model.selected_id)["cwd"] == ctx.root
+    Console.close(model)
+  end
+
   test "console completes directories on the service host without registering them", ctx do
     model = Console.perform(Console.new(socket: Config.socket_path(ctx.config)), :connect, self())
 

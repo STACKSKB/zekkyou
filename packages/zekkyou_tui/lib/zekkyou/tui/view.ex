@@ -10,6 +10,81 @@ defmodule Zekkyou.TUI.View do
   alias ExRatatui.Layout.Rect
   alias ExRatatui.Widgets.{Block, List, Paragraph, Popup}
 
+  @doc "Workspace headers and task rows in their displayed order."
+  def rail_rows(state) do
+    projects = Map.get(state, :projects, [])
+    tasks = Map.get(state, :tasks, [])
+    active = active_project_id(state)
+
+    rows =
+      Enum.flat_map(projects, fn project ->
+        expanded? = project["id"] == active
+
+        header = %{
+          kind: :project,
+          id: project["id"],
+          label: if(expanded?, do: "▾ ", else: "▸ ") <> project["name"]
+        }
+
+        children =
+          if expanded?,
+            do: Enum.filter(tasks, &(task_project_id(&1, projects) == project["id"])),
+            else: []
+
+        [header | Enum.map(children, &task_row(&1, "  "))]
+      end)
+
+    # Retain legacy/service tasks without a registered workspace.
+    rows ++
+      (tasks
+       |> Enum.filter(&is_nil(task_project_id(&1, projects)))
+       |> Enum.map(&task_row(&1, "")))
+  end
+
+  def selected_rail_index(state, rows) do
+    target =
+      if Map.get(state, :selected_id),
+        do: {:task, state.selected_id},
+        else: {:project, active_project_id(state)}
+
+    Enum.find_index(rows, &({&1.kind, &1.id} == target))
+  end
+
+  def rail_target(state, width, height, x, y) do
+    rail = Layout.calculate(width, height).rail
+
+    if Layout.contains?(rail, x, y) do
+      visible = max(rail.height - 3, 0)
+      rows = rail_rows(state)
+      offset = max((selected_rail_index(state, rows) || 0) - visible + 1, 0)
+      row = y - rail.y - 2
+
+      cond do
+        y == rail.y + 1 -> :new_workspace
+        row >= 0 and row < visible -> Enum.at(rows, row + offset)
+        true -> nil
+      end
+    end
+  end
+
+  defp active_project_id(state) do
+    projects = Map.get(state, :projects, [])
+    task = Enum.find(Map.get(state, :tasks, []), &(&1.id == Map.get(state, :selected_id)))
+
+    (task && task_project_id(task, projects)) || Map.get(state, :workspace_id) ||
+      Enum.find_value(projects, fn p ->
+        if p["root"] == Map.get(state, :workspace_root), do: p["id"]
+      end)
+  end
+
+  defp task_project_id(task, projects) do
+    Enum.find_value(projects, fn p ->
+      if p["id"] == Map.get(task, :workspace_id) or p["root"] == Map.get(task, :cwd), do: p["id"]
+    end)
+  end
+
+  defp task_row(task, indent), do: %{kind: :task, id: task.id, label: indent <> task_label(task)}
+
   @type state :: map()
   @type rendered :: {ExRatatui.widget(), Rect.t()}
 
@@ -19,10 +94,9 @@ defmodule Zekkyou.TUI.View do
     geometry = Layout.calculate(viewport.width, viewport.height)
     geometry = translate(geometry, viewport.x, viewport.y)
 
-    tasks = Map.get(state, :tasks, [])
-    selected_id = Map.get(state, :selected_id)
-    task_items = Enum.map(tasks, &task_label/1)
-    selected = Enum.find_index(tasks, &(Map.get(&1, :id) == selected_id))
+    rows = rail_rows(state)
+    task_items = Enum.map(rows, & &1.label)
+    selected = selected_rail_index(state, rows)
 
     rail =
       if geometry.rail do
@@ -43,8 +117,9 @@ defmodule Zekkyou.TUI.View do
         }
 
         [
-          {panel(if(Map.get(state, :focus) == :tasks, do: "Tasks •", else: "Tasks")), rect},
-          {%Paragraph{text: "+ New task · ^G N"}, %{inner | y: rect.y + 1, height: 1}},
+          {panel(if(Map.get(state, :focus) == :tasks, do: "Workspaces •", else: "Workspaces")),
+           rect},
+          {%Paragraph{text: "+ New workspace · ^G W"}, %{inner | y: rect.y + 1, height: 1}},
           {list, inner}
         ]
       else

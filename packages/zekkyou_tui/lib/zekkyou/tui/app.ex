@@ -168,16 +168,20 @@ defmodule Zekkyou.TUI.App do
         else
           layout = Alto.TUI.Layout.calculate(width, height)
 
-          cond do
-            layout.rail && mouse.y == layout.rail.y + 1 &&
-                Alto.TUI.Layout.contains?(layout.rail, mouse.x, mouse.y) ->
-              dispatch(%{state | focus: :composer}, :new)
+          case View.rail_target(state.model, width, height, mouse.x, mouse.y) do
+            :new_workspace ->
+              open_workspace_form(state)
 
-            Alto.TUI.Layout.contains?(layout.details, mouse.x, mouse.y) ->
-              {:noreply, %{state | focus: :details}}
+            %{kind: :project, id: id} ->
+              dispatch(%{state | focus: :composer}, {:select_workspace, id})
 
-            true ->
-              {:noreply, state}
+            %{kind: :task, id: id} ->
+              dispatch(%{state | focus: :tasks}, {:select, id})
+
+            _ ->
+              if Alto.TUI.Layout.contains?(layout.details, mouse.x, mouse.y),
+                do: {:noreply, %{state | focus: :details}},
+                else: {:noreply, state}
           end
         end
 
@@ -345,7 +349,7 @@ defmodule Zekkyou.TUI.App do
         {:noreply, scroll(state, state.focus, offset)}
 
       code in ["up", "down"] and state.focus == :tasks ->
-        select_task(state, code)
+        select_rail(state, code)
 
       code == "enter" and state.focus == :composer ->
         dispatch(state, composer_action(state, state.draft))
@@ -426,7 +430,7 @@ defmodule Zekkyou.TUI.App do
 
     scroll =
       if approval_changed? or action == :new or match?({:workspace, _}, action) or
-           match?({:select, _}, action),
+           match?({:select, _}, action) or match?({:select_workspace, _}, action),
          do: 0,
          else: state.scroll
 
@@ -455,7 +459,8 @@ defmodule Zekkyou.TUI.App do
          scroll: scroll,
          details_scroll:
            if(
-             approval_changed? or action == :new or match?({:select, _}, action) or
+             approval_changed? or action == :new or
+               match?({:select, _}, action) or match?({:select_workspace, _}, action) or
                match?({:workspace, _}, action),
              do: 0,
              else: state.details_scroll
@@ -582,18 +587,19 @@ defmodule Zekkyou.TUI.App do
   defp next_focus(:composer), do: :tasks
   defp next_focus(:tasks), do: :composer
 
-  defp select_task(state, direction) do
-    ids = Enum.map(state.model.tasks, & &1.id)
-    current = Enum.find_index(ids, &(&1 == state.model.selected_id))
+  defp select_rail(state, direction) do
+    rows = View.rail_rows(state.model)
+    current = View.selected_rail_index(state.model, rows)
 
     index =
       if is_nil(current),
         do: 0,
-        else: max(0, min(length(ids) - 1, current + if(direction == "up", do: -1, else: 1)))
+        else: max(0, min(length(rows) - 1, current + if(direction == "up", do: -1, else: 1)))
 
-    case Enum.at(ids, index) do
-      nil -> {:noreply, state}
-      id -> dispatch(state, {:select, id})
+    case Enum.at(rows, index) do
+      %{kind: :project, id: id} -> dispatch(state, {:select_workspace, id})
+      %{kind: :task, id: id} -> dispatch(state, {:select, id})
+      _ -> {:noreply, state}
     end
   end
 
