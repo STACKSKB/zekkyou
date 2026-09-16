@@ -47,6 +47,40 @@ defmodule Zekkyou.ProjectsTest do
     %{config: config, name: name, folder: folder, root: root}
   end
 
+  test "console creates folders on the service host and opens the new workspace", ctx do
+    model =
+      Console.perform(
+        Console.new(socket: Config.socket_path(ctx.config), profile: "test"),
+        :connect,
+        self()
+      )
+
+    on_exit(fn -> Console.close(model) end)
+    folder = Path.join(ctx.root, "New Parent/Project É!")
+    opened = Console.perform(model, {:create_workspace, "New Parent/Project É!"}, self())
+    assert File.dir?(folder)
+    assert opened.workspace_root == folder
+    assert opened.selected_id == nil
+    assert opened.notice =~ "Workspace opened:"
+    assert Enum.any?(opened.projects, &(&1["root"] == folder))
+
+    duplicate = Console.perform(opened, {:create_workspace, folder}, self())
+    assert duplicate.notice =~ "already exists"
+    assert duplicate.workspace_id == opened.workspace_id
+    assert duplicate.connection == "connected"
+
+    File.write!(Path.join(ctx.root, "existing-file"), "keep")
+    failed = Console.perform(opened, {:create_workspace, "existing-file"}, self())
+    assert failed.notice =~ "file already exists"
+    refute failed.notice =~ "%{"
+    assert File.read!(Path.join(ctx.root, "existing-file")) == "keep"
+    assert failed.workspace_id == opened.workspace_id
+
+    invalid = Console.perform(opened, {:create_workspace, ""}, self())
+    assert invalid.notice =~ "Enter a folder path"
+    assert invalid.workspace_id == opened.workspace_id
+  end
+
   test "console workspaces launch in their folder and follow-ups retain it", ctx do
     model =
       Console.perform(

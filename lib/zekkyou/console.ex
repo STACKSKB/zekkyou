@@ -193,9 +193,11 @@ defmodule Zekkyou.Console do
     %{model | notice: "Workspace closed · reopen its folder to return"}
   end
 
-  defp do_perform(model, {:workspace, path}, _owner) do
+  defp do_perform(model, {action, path}, _owner) when action in [:workspace, :create_workspace] do
+    command = if action == :create_workspace, do: "projects.create", else: "projects.open"
+
     reply =
-      request(model.client, %{type: "command", name: "projects.open", payload: %{path: path}})
+      request(model.client, %{type: "command", name: command, payload: %{path: path}})
 
     project = reply["project"]
 
@@ -768,6 +770,9 @@ defmodule Zekkyou.Console do
       {:error, reason} -> throw({:console, reason})
     end
   end
+
+  defp failed(model, {:create_workspace, _}, {:server, _, _} = reason),
+    do: %{model | notice: "Could not create folder: #{Alto.Display.error(reason)}"}
 
   defp failed(model, {:workspace, _path}, {:server, _, _} = reason) do
     detail = Alto.Display.error(reason)

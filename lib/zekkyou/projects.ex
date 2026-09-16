@@ -29,6 +29,14 @@ defmodule Zekkyou.Projects do
         _ ->
           {:error, :invalid_workspace}
       end,
+      "projects.create" => fn
+        %{"path" => path} ->
+          with {:ok, root} <- Alto.Harness.Folders.create(path, config.workspace),
+               do: open(config, root)
+
+        _ ->
+          {:error, :invalid_workspace_path}
+      end,
       "projects.open" => fn
         %{"path" => path} -> open(config, path)
         _ -> {:error, :invalid_workspace_path}

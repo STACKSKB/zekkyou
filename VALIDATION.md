@@ -1,7 +1,7 @@
 # Development checkpoint — 2026-09-10
 
 Current Alto source: published commit
-`8feb1000cd105352566f8612425b842fb3014822`, pinned in both the service and
+`8d709fd8f66d263b8d47cd84fe82a853031fa12b`, pinned in both the service and
 terminal dependency declarations and lockfiles. Fresh builds use the Git
 dependency directly. The sections below retain earlier development checkpoints;
 the latest validation is recorded at the end.
@@ -1015,3 +1015,24 @@ Validation:
 
 Restart the TUIs to load the new renderer. Existing saved reports are formatted
 on display without rewriting their stored source.
+
+## Create folders from the workspace dialog — 2026-09-16
+
+Published Alto `8d709fd8f66d263b8d47cd84fe82a853031fa12b` and updated both
+Zekkyou pins/lockfiles. The shared dialog has a clickable Create folder action
+and Ctrl+N shortcut. Creation uses the typed path, including missing parents,
+then opens the workspace while preserving the draft. Enter still only opens
+existing folders. Existing files/folders and invalid paths yield readable errors
+without replacing data or clearing the dialog.
+
+Zekkyou dispatches `projects.create` to the service host, resolving relative paths
+against the base shown in the dialog. Its service owns directory creation and
+workspace registration; the terminal never creates a local substitute folder.
+Both service and TUI need restarting after the upgrade.
+
+Validation: 119 Alto folder/TUI tests and 6 display tests passed; 114 Zekkyou
+service tests and 38 TUI tests passed against the published dependency without
+ALTO_PATH. Coverage includes nested paths, spaces/Unicode, invalid inputs,
+existing file preservation, duplicate-folder errors, click and keyboard actions,
+remote path resolution, draft preservation and successful/error dialog states.
+Compilation with warnings as errors, formatting and whitespace checks passed.

@@ -25,6 +25,12 @@ defmodule Zekkyou.TUI.AppTest do
           notice: "Workspace opened: " <> path
         })
 
+    def perform(model, {:create_workspace, "/bad"}, _),
+      do: Map.put(model, :notice, "Could not create folder: Permission denied")
+
+    def perform(model, {:create_workspace, path}, owner),
+      do: perform(model, {:workspace, path}, owner)
+
     def perform(model, {:select_workspace, id}, _) do
       project = Enum.find(model.projects, &(&1["id"] == id))
       Map.merge(model, %{workspace_id: id, workspace_root: project["root"], selected_id: nil})
@@ -491,6 +497,38 @@ defmodule Zekkyou.TUI.AppTest do
     assert state.model.selected_id == nil
     assert state.draft == "keep my draft"
     assert state.focus == :composer
+  end
+
+  test "folder creation dispatches to the service, preserves drafts and displays failures" do
+    {:ok, state} = App.mount(console_module: Console, test_mode: {140, 40})
+    state = %{state | draft: "keep my draft", scroll: 10, details_scroll: 10}
+    {:noreply, state} = App.handle_event(%Key{code: "g", modifiers: ["ctrl"]}, state)
+    {:noreply, state} = App.handle_event(%Key{code: "w"}, state)
+    {:noreply, state} = App.handle_event(%Paste{content: "/bad"}, state)
+    {:noreply, state} = App.handle_event(%Key{code: "n", modifiers: ["ctrl"]}, state)
+    ref = state.pending.ref
+    assert_receive {^ref, {model, {:create_workspace, "/bad"}}}
+    {:noreply, state} = App.handle_info({ref, {model, {:create_workspace, "/bad"}}}, state)
+    assert state.workspace_form.error =~ "Permission denied"
+    assert state.model.selected_id == "run"
+    assert state.draft == "keep my draft"
+
+    {:noreply, state} = App.handle_event(%Key{code: "u", modifiers: ["ctrl"]}, state)
+    {:noreply, state} = App.handle_event(%Paste{content: "New Folder"}, state)
+    rect = Alto.TUI.WorkspaceForm.rect(140, 40)
+    mouse = %Mouse{kind: "down", button: "left", x: rect.x + 31, y: rect.y + rect.height - 4}
+    {:noreply, state} = App.handle_event(mouse, state)
+    {:noreply, state} = App.handle_event(%{mouse | kind: "up"}, state)
+    ref = state.pending.ref
+    assert_receive {^ref, {model, {:create_workspace, "New Folder"}}}
+    {:noreply, state} = App.handle_info({ref, {model, {:create_workspace, "New Folder"}}}, state)
+    assert state.workspace_form == nil
+    assert state.model.workspace_root == "New Folder"
+    assert state.model.selected_id == nil
+    assert state.draft == "keep my draft"
+    assert state.focus == :composer
+    assert state.scroll == 0
+    assert state.details_scroll == 0
   end
 
   test "workspace validation keeps the dialog open and Escape preserves the selected task" do

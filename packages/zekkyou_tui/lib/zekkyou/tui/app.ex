@@ -436,14 +436,14 @@ defmodule Zekkyou.TUI.App do
     approval_changed? = View.approval_key(state.model) != View.approval_key(model)
 
     scroll =
-      if approval_changed? or action == :new or match?({:workspace, _}, action) or
+      if approval_changed? or action == :new or workspace_action?(action) or
            match?({:select, _}, action) or
            match?({:select_workspace, _}, action) or match?({:close_workspace, _}, action),
          do: 0,
          else: state.scroll
 
     form =
-      if match?({:workspace, _}, action) and state.workspace_form do
+      if workspace_action?(action) and state.workspace_form do
         if String.starts_with?(model.notice, "Workspace opened:"),
           do: nil,
           else: %{state.workspace_form | error: model.notice}
@@ -470,7 +470,7 @@ defmodule Zekkyou.TUI.App do
              approval_changed? or action == :new or
                match?({:select, _}, action) or
                match?({:select_workspace, _}, action) or match?({:close_workspace, _}, action) or
-               match?({:workspace, _}, action),
+               workspace_action?(action),
              do: 0,
              else: state.details_scroll
            ),
@@ -481,7 +481,7 @@ defmodule Zekkyou.TUI.App do
              approval_changed? and View.approval(model) != nil ->
                :composer
 
-             match?({:workspace, _}, action) and is_nil(form) ->
+             workspace_action?(action) and is_nil(form) ->
                :composer
 
              match?({:close_workspace, _}, action) and
@@ -551,6 +551,9 @@ defmodule Zekkyou.TUI.App do
      }}
   end
 
+  defp workspace_action?({action, _}), do: action in [:workspace, :create_workspace]
+  defp workspace_action?(_), do: false
+
   defp open_workspace_form(state) do
     base = Map.get(state.model, :workspace_base) || "the service's default workspace"
 
@@ -576,6 +579,8 @@ defmodule Zekkyou.TUI.App do
 
     {:noreply, %{state | workspace_form: form}}
   end
+
+  defp workspace_result(state, {:create, path}), do: dispatch(state, {:create_workspace, path})
 
   defp workspace_result(state, {:submit, path}), do: dispatch(state, {:workspace, path})
 

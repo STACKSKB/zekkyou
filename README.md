@@ -10,7 +10,7 @@ Development is in progress; this is not yet the unattended-operation release.
 ## Development
 
 The dependency and lockfiles pin Alto commit
-`8feb1000cd105352566f8612425b842fb3014822`, which includes exact parent-batch
+`8d709fd8f66d263b8d47cd84fe82a853031fa12b`, which includes exact parent-batch
 continuations, independent child approvals and explicit resource retirement
 for the Serial/Stepped runners, plus shared TUI screen selection, clipboard support,
 and the folder workspace dialog.
@@ -251,3 +251,9 @@ Assistant reports in the TUI render as Markdown, including styled headings,
 emphasis, indented syntax-highlighted code, and responsive tables. Small tables
 keep aligned columns; long evidence tables become labeled records. Selection
 copies the visible formatted text, while stored messages retain their Markdown.
+
+The workspace dialog (`Ctrl+G`, then `W`) also supports **Create folder**
+(`Ctrl+N`): type a new path to create it, including missing parent folders, and
+open it as a workspace while keeping the current draft. Creation happens on the
+service host, relative to the base shown in the dialog. Restart both the service
+and TUI after upgrading to enable the new command.
